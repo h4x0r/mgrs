@@ -103,14 +103,42 @@ fn run_to_latlon(args: &ConvertArgs) -> Result<()> {
     Ok(())
 }
 
+fn run_to_mgrs(args: &ConvertArgs) -> Result<()> {
+    let format = parse_format(&args.format)?;
+    let input = File::open(&args.input)
+        .map_err(|e| anyhow::anyhow!("Failed to open '{}': {}", args.input, e))?;
+
+    let output: Box<dyn io::Write> = match &args.output {
+        Some(path) => Box::new(BufWriter::new(File::create(path)?)),
+        None => Box::new(io::stdout()),
+    };
+
+    let config = ProcessConfig {
+        column: args.column.as_deref().map(parse_column),
+        strict: args.strict,
+        name_column: args.name_column.clone(),
+    };
+
+    let stats = stream::process_to_mgrs(input, output, format, &config, args.precision)?;
+
+    eprintln!(
+        "Processed {} rows: {} succeeded, {} failed.",
+        stats.total_rows, stats.succeeded_rows, stats.failed_rows
+    );
+
+    if stats.failed_rows > 0 && stats.succeeded_rows > 0 {
+        process::exit(2);
+    }
+
+    Ok(())
+}
+
 fn main() -> Result<()> {
     let cli = Cli::parse();
 
     match cli.command {
         Some(Commands::ToLatlon(args)) => run_to_latlon(&args),
-        Some(Commands::ToMgrs(_args)) => {
-            anyhow::bail!("to-mgrs is not yet implemented")
-        }
+        Some(Commands::ToMgrs(args)) => run_to_mgrs(&args),
         None => {
             match cli.input {
                 Some(input) => run_to_latlon(&ConvertArgs {

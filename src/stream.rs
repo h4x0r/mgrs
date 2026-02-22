@@ -174,6 +174,108 @@ fn process_record(
     Ok(())
 }
 
+/// Process a CSV input, converting lat/lon columns to MGRS, writing CSV output.
+/// The input CSV must have columns that look like latitude and longitude values.
+pub fn process_to_mgrs<R: Read, W: Write>(
+    input: R,
+    output: W,
+    _format: FormatKind, // Currently only CSV output for to-mgrs
+    config: &ProcessConfig,
+    precision: u8,
+) -> Result<ProcessStats> {
+    let mut reader = csv::Reader::from_reader(BufReader::new(input));
+    let headers: Vec<String> = reader.headers()?.iter().map(|h| h.to_string()).collect();
+
+    // Find lat/lon columns
+    let (lat_col, lon_col) = match &config.column {
+        Some(ColumnSpec::Name(name)) => {
+            // If user specifies a column, use it as lat; find lon nearby
+            let lat_idx = headers.iter().position(|h| h.to_lowercase().contains(&name.to_lowercase()))
+                .with_context(|| format!("Column '{}' not found", name))?;
+            let lon_idx = headers.iter().position(|h| {
+                let lower = h.to_lowercase();
+                lower.contains("lon") || lower.contains("lng")
+            }).with_context(|| "Could not find a longitude column")?;
+            (lat_idx, lon_idx)
+        }
+        Some(ColumnSpec::Index(idx)) => {
+            // Assume idx is lat, idx+1 is lon
+            (*idx, idx + 1)
+        }
+        None => {
+            // Auto-detect: find columns named like "lat" and "lon"/"lng"
+            let lat_idx = headers.iter().position(|h| {
+                let lower = h.to_lowercase();
+                lower.contains("lat")
+            }).with_context(|| "Could not find a latitude column. Use --column to specify.")?;
+
+            let lon_idx = headers.iter().position(|h| {
+                let lower = h.to_lowercase();
+                lower.contains("lon") || lower.contains("lng")
+            }).with_context(|| "Could not find a longitude column.")?;
+
+            (lat_idx, lon_idx)
+        }
+    };
+
+    // Write output as CSV with MGRS column appended
+    let mut csv_writer = csv::Writer::from_writer(output);
+
+    let mut out_headers: Vec<&str> = headers.iter().map(|h| h.as_str()).collect();
+    out_headers.push("MGRS");
+    csv_writer.write_record(&out_headers)?;
+
+    let mut stats = ProcessStats {
+        total_rows: 0,
+        succeeded_rows: 0,
+        failed_rows: 0,
+    };
+
+    for result in reader.records() {
+        let record = result?;
+        stats.total_rows += 1;
+
+        let lat_str = record.get(lat_col).unwrap_or("").trim();
+        let lon_str = record.get(lon_col).unwrap_or("").trim();
+
+        let mgrs_value = match (lat_str.parse::<f64>(), lon_str.parse::<f64>()) {
+            (Ok(lat), Ok(lon)) => {
+                match convert::latlon_to_mgrs(lat, lon, precision) {
+                    Ok(mgrs) => {
+                        stats.succeeded_rows += 1;
+                        mgrs.0
+                    }
+                    Err(e) => {
+                        stats.failed_rows += 1;
+                        eprintln!("Warning: row {}: failed to convert ({}, {}): {}", stats.total_rows, lat_str, lon_str, e);
+                        if config.strict {
+                            return Err(e.context(format!("Strict mode: aborting at row {}", stats.total_rows)));
+                        }
+                        String::new()
+                    }
+                }
+            }
+            _ => {
+                stats.failed_rows += 1;
+                if !lat_str.is_empty() || !lon_str.is_empty() {
+                    eprintln!("Warning: row {}: invalid lat/lon values '{}', '{}'", stats.total_rows, lat_str, lon_str);
+                }
+                if config.strict {
+                    anyhow::bail!("Strict mode: invalid coordinates at row {}", stats.total_rows);
+                }
+                String::new()
+            }
+        };
+
+        let mut out_record: Vec<String> = record.iter().map(|f| f.to_string()).collect();
+        out_record.push(mgrs_value);
+        csv_writer.write_record(&out_record)?;
+    }
+
+    csv_writer.flush()?;
+    Ok(stats)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -237,6 +339,24 @@ mod tests {
         };
         let result = process_to_latlon(input, &mut output, FormatKind::Csv, &config);
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_process_to_mgrs() {
+        let csv_data = "Name,Latitude,Longitude\nDC,38.8977,-77.0365\n";
+        let input = std::io::Cursor::new(csv_data);
+        let mut output = Vec::new();
+        let config = ProcessConfig {
+            column: None,
+            strict: false,
+            name_column: None,
+        };
+        let stats = process_to_mgrs(input, &mut output, FormatKind::Csv, &config, 5).unwrap();
+        let result = String::from_utf8(output).unwrap();
+        assert!(result.contains("MGRS"), "Output should have MGRS header: {}", result);
+        assert!(result.contains("18S"), "Output should contain MGRS grid zone: {}", result);
+        assert_eq!(stats.total_rows, 1);
+        assert_eq!(stats.succeeded_rows, 1);
     }
 
     #[test]
