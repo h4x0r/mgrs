@@ -1,6 +1,6 @@
-# MGRS to Lat/Long Converter
+# mgrs
 
-A Rust command-line tool for converting MGRS (Military Grid Reference System) coordinates to latitude/longitude in CSV files.
+Bidirectional MGRS/lat-long coordinate conversion CLI and Rust library. Reads CSV files and outputs to CSV, GeoJSON, KML, or GPX.
 
 ## Author
 
@@ -8,60 +8,128 @@ Albert Hui <albert@securityronin.com>
 
 ## Features
 
-- Automatically detects MGRS coordinate columns in CSV files
-- Converts MGRS coordinates to decimal latitude/longitude
-- Preserves original data while adding new latitude and longitude columns
-- Supports flexible MGRS format recognition
-- Command-line interface with input/output file options
+- **Bidirectional conversion**: MGRS to lat/lon (`to-latlon`) and lat/lon to MGRS (`to-mgrs`)
+- **Multiple output formats**: CSV, GeoJSON, KML, GPX
+- **Auto-detection**: Finds MGRS columns automatically, no configuration needed
+- **Streaming**: Processes rows one at a time — handles large files without loading everything into memory
+- **Strict mode**: Optionally abort on first conversion error
+- **Library API**: Use as a Rust library in your own projects
 
 ## Installation
 
-### Install from crates.io (Recommended)
+### From crates.io
 
 ```bash
-cargo install mgrs2latlong
+cargo install mgrs
 ```
 
-### Build from Source
-
-Ensure you have Rust installed, then build the project:
+### From source
 
 ```bash
+git clone https://github.com/4n6h4x0r/mgrs.git
+cd mgrs
 cargo build --release
 ```
 
+The binary will be at `target/release/mgrs`.
+
 ## Usage
 
+### MGRS to Lat/Lon
+
 ```bash
-# Convert MGRS coordinates in input.csv and write to output.csv
-mgrs2latlong input.csv --output output.csv
+# Output CSV to stdout
+mgrs to-latlon input.csv
 
-# Convert and output to stdout
-mgrs2latlong input.csv
+# Output GeoJSON to a file
+mgrs to-latlon input.csv --format geojson -o output.geojson
 
-# If built from source, use the full path:
-# ./target/release/mgrs2latlong input.csv --output output.csv
+# Output KML with custom name column
+mgrs to-latlon input.csv --format kml --name-column "Site Name" -o output.kml
+
+# Output GPX waypoints
+mgrs to-latlon input.csv --format gpx -o output.gpx
+
+# Specify the MGRS column explicitly
+mgrs to-latlon input.csv --column "Grid Ref"
+
+# Abort on first error
+mgrs to-latlon input.csv --strict
 ```
+
+### Lat/Lon to MGRS
+
+```bash
+# Append MGRS column to CSV
+mgrs to-mgrs input.csv
+
+# Control MGRS precision (1-5, default 6)
+mgrs to-mgrs input.csv --precision 3
+```
+
+### Backward Compatibility
+
+Running without a subcommand defaults to `to-latlon`:
+
+```bash
+mgrs input.csv
+```
+
+## Flags
+
+| Flag | Short | Description | Default |
+|------|-------|-------------|---------|
+| `--format` | `-f` | Output format: `csv`, `geojson`, `kml`, `gpx` | `csv` |
+| `--output` | `-o` | Output file path (omit for stdout) | stdout |
+| `--column` | `-c` | Column name or index containing coordinates | auto-detect |
+| `--precision` | `-p` | Decimal places in output coordinates | `6` |
+| `--strict` | | Abort on first conversion error | off |
+| `--name-column` | | Column for placemark/waypoint names (KML/GPX) | first text column |
 
 ## Input Format
 
-The tool accepts CSV files with MGRS coordinates in any column. MGRS coordinates should follow the standard format (e.g., "33TWM1234567890" or "33T WM 12345 67890").
+CSV files with either:
+- An **MGRS column** (for `to-latlon`): values like `18SUJ2337006519` or `18S UJ 23370 06519`
+- **Latitude/Longitude columns** (for `to-mgrs`): columns with names containing "lat" and "lon"/"lng"
 
-## Output Format
+## Output Formats
 
-The tool outputs a CSV file with:
-- All original columns preserved
-- Additional `latitude` column with decimal degrees
-- Additional `longitude` column with decimal degrees
+| Format | Description |
+|--------|-------------|
+| **CSV** | Original columns plus appended Latitude/Longitude (or MGRS) columns |
+| **GeoJSON** | `FeatureCollection` with `Point` features; all CSV columns become properties |
+| **KML** | `Placemark` elements with `ExtendedData` carrying all CSV fields |
+| **GPX** | `wpt` (waypoint) elements with names from `--name-column` or first text column |
 
-## Dependencies
+## Exit Codes
 
-- `clap` - Command-line argument parsing
-- `csv` - CSV file handling
-- `regex` - Pattern matching for MGRS detection
-- `geoconvert` - MGRS coordinate conversion
-- `anyhow` - Error handling
+| Code | Meaning |
+|------|---------|
+| `0` | All rows converted successfully |
+| `1` | Fatal error (bad input file, unknown format, etc.) |
+| `2` | Partial success — some rows failed conversion |
+
+## Library Usage
+
+Add to your `Cargo.toml`:
+
+```toml
+[dependencies]
+mgrs = "0.2"
+```
+
+```rust
+use mgrs::convert::{mgrs_to_latlon, latlon_to_mgrs};
+
+// MGRS to Lat/Lon
+let coord = mgrs_to_latlon("18SUJ2337006519").unwrap();
+println!("{}, {}", coord.latitude, coord.longitude);
+
+// Lat/Lon to MGRS
+let mgrs = latlon_to_mgrs(38.8977, -77.0365, 5).unwrap();
+println!("{}", mgrs.0);
+```
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+Dual-licensed under [MIT](LICENSE) or Apache-2.0, at your option.

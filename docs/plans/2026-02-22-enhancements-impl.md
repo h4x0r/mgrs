@@ -1,8 +1,8 @@
-# mgrs2latlong v0.2.0 Enhancement Implementation Plan
+# mgrs v0.2.0 Enhancement Implementation Plan
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** Transform mgrs2latlong from a single-file MGRS→LatLon CSV converter into a modular, bidirectional coordinate conversion tool with multiple output formats (CSV, GeoJSON, KML, GPX), streaming processing, and a reusable library API.
+**Goal:** Transform mgrs from a single-file MGRS→LatLon CSV converter into a modular, bidirectional coordinate conversion tool with multiple output formats (CSV, GeoJSON, KML, GPX), streaming processing, and a reusable library API.
 
 **Architecture:** Modular monolith — library crate (`lib.rs`) with modules for conversion, detection, formats, and streaming, plus a thin CLI binary (`main.rs`) using clap subcommands. All modules are unit-tested independently.
 
@@ -32,11 +32,11 @@ indicatif = "0.17"
 Add `[lib]` section and update package metadata:
 ```toml
 [lib]
-name = "mgrs2latlong"
+name = "mgrs"
 path = "src/lib.rs"
 
 [[bin]]
-name = "mgrs2latlong"
+name = "mgrs"
 path = "src/main.rs"
 ```
 
@@ -1014,7 +1014,7 @@ impl<W: Write> OutputFormat for GpxOutput<W> {
         write!(
             self.output,
             "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n\
-            <gpx version=\"1.1\" creator=\"mgrs2latlong\"\n     \
+            <gpx version=\"1.1\" creator=\"mgrs\"\n     \
             xmlns=\"http://www.topografix.com/GPX/1/1\">\n{}\n</gpx>\n",
             self.waypoints.join("\n")
         )?;
@@ -1381,7 +1381,7 @@ Create `tests/cli_integration.rs`:
 use std::process::Command;
 
 fn cargo_bin() -> Command {
-    Command::new(env!("CARGO_BIN_EXE_mgrs2latlong"))
+    Command::new(env!("CARGO_BIN_EXE_mgrs"))
 }
 
 #[test]
@@ -1452,10 +1452,10 @@ use clap::{Parser, Subcommand};
 use std::fs::File;
 use std::io::{self, BufWriter};
 use std::process;
-use mgrs2latlong::stream::{self, FormatKind, ColumnSpec, ProcessConfig};
+use mgrs::stream::{self, FormatKind, ColumnSpec, ProcessConfig};
 
 #[derive(Parser)]
-#[command(name = "mgrs2latlong")]
+#[command(name = "mgrs")]
 #[command(about = "Convert between MGRS coordinates and latitude/longitude in CSV files")]
 #[command(author = "Albert Hui <albert@securityronin.com>")]
 #[command(version)]
@@ -1575,7 +1575,7 @@ fn main() -> Result<()> {
                     name_column: None,
                 }),
                 None => {
-                    anyhow::bail!("No input file specified. Usage: mgrs2latlong <INPUT> or mgrs2latlong to-latlon <INPUT>")
+                    anyhow::bail!("No input file specified. Usage: mgrs <INPUT> or mgrs to-latlon <INPUT>")
                 }
             }
         }
@@ -1661,8 +1661,8 @@ git commit -m "feat: add to-mgrs reverse conversion command"
 Use `indicatif::ProgressBar` to show conversion progress when writing to a file (not stdout). Count total lines in input file first, then create a progress bar.
 
 This is UI-only, so manual testing is appropriate here. Verify:
-- `mgrs2latlong to-latlon tests/fixtures/sample.csv -o /tmp/out.csv` shows progress bar
-- `mgrs2latlong to-latlon tests/fixtures/sample.csv` (stdout) shows no progress bar
+- `mgrs to-latlon tests/fixtures/sample.csv -o /tmp/out.csv` shows progress bar
+- `mgrs to-latlon tests/fixtures/sample.csv` (stdout) shows no progress bar
 
 **Step 2: Commit**
 

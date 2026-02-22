@@ -4,10 +4,10 @@ use indicatif::{ProgressBar, ProgressStyle};
 use std::fs::File;
 use std::io::{self, BufRead, BufReader, BufWriter};
 use std::process;
-use mgrs2latlong::stream::{self, FormatKind, ColumnSpec, ProcessConfig};
+use mgrs::stream::{self, FormatKind, ColumnSpec, ProcessConfig};
 
 #[derive(Parser)]
-#[command(name = "mgrs2latlong")]
+#[command(name = "mgrs")]
 #[command(about = "Convert between MGRS coordinates and latitude/longitude in CSV files")]
 #[command(author = "Albert Hui <albert@securityronin.com>")]
 #[command(version)]
@@ -202,7 +202,7 @@ fn main() -> Result<()> {
                     name_column: None,
                 }),
                 None => {
-                    anyhow::bail!("No input file specified. Usage: mgrs2latlong <INPUT> or mgrs2latlong to-latlon <INPUT>")
+                    anyhow::bail!("No input file specified. Usage: mgrs <INPUT> or mgrs to-latlon <INPUT>")
                 }
             }
         }

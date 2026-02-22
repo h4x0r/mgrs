@@ -1,15 +1,13 @@
-# mgrs2latlong Enhancement Design
+# mgrs Enhancement Design
 
 **Date:** 2026-02-22
-**Status:** Approved
+**Status:** Implemented
 
 ## Context
 
-mgrs2latlong is a Rust CLI that converts MGRS coordinates to latitude/longitude in CSV files. It auto-detects the MGRS column, appends Latitude/Longitude columns, and writes to file or stdout.
+mgrs is a Rust CLI and library for bidirectional MGRS/lat-long coordinate conversion in CSV files. It auto-detects coordinate columns, supports multiple output formats, and can be used as a library.
 
 **Primary use case:** GIS/mapping workflows. File sizes vary widely.
-
-**Naming convention:** "latlong" in user-facing names (matches crate name), "latlon" in internal code (matches geoconvert API).
 
 ## Architecture: Modular Monolith
 
@@ -35,9 +33,9 @@ src/
 Subcommand-based, backward-compatible:
 
 ```
-mgrs2latlong to-latlon input.csv -o output.csv --format csv
-mgrs2latlong to-mgrs input.csv -o output.geojson --format geojson
-mgrs2latlong to-latlon input.csv --column "MGRS Grid" --format kml
+mgrs to-latlon input.csv -o output.csv --format csv
+mgrs to-mgrs input.csv -o output.geojson --format geojson
+mgrs to-latlon input.csv --column "MGRS Grid" --format kml
 ```
 
 ### Flags
@@ -53,7 +51,7 @@ mgrs2latlong to-latlon input.csv --column "MGRS Grid" --format kml
 
 ### Backward Compatibility
 
-Running `mgrs2latlong input.csv` without a subcommand defaults to `to-latlon` behavior.
+Running `mgrs input.csv` without a subcommand defaults to `to-latlon` behavior.
 
 ## Output Formats
 

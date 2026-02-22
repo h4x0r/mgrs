@@ -57,7 +57,7 @@ impl<W: Write> OutputFormat for GpxOutput<W> {
     fn finish(&mut self) -> Result<()> {
         write!(
             self.output,
-            "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<gpx version=\"1.1\" creator=\"mgrs2latlong\"\n     xmlns=\"http://www.topografix.com/GPX/1/1\">\n{}\n</gpx>\n",
+            "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<gpx version=\"1.1\" creator=\"mgrs\"\n     xmlns=\"http://www.topografix.com/GPX/1/1\">\n{}\n</gpx>\n",
             self.waypoints.join("\n")
         )?;
         self.output.flush()?;

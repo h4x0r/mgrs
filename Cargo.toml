@@ -1,20 +1,20 @@
 [package]
-name = "mgrs2latlong"
+name = "mgrs"
 version = "0.2.0"
 edition = "2021"
 authors = ["Albert Hui <albert@securityronin.com>"]
-description = "A command-line tool for bidirectional MGRS/lat-long coordinate conversion with CSV, GeoJSON, KML, and GPX output"
+description = "Bidirectional MGRS/lat-long coordinate conversion CLI with CSV, GeoJSON, KML, and GPX output"
 license = "MIT OR Apache-2.0"
-repository = "https://github.com/4n6h4x0r/mgrs2latlong"
+repository = "https://github.com/4n6h4x0r/mgrs"
 keywords = ["mgrs", "coordinates", "gis", "conversion", "csv"]
 categories = ["command-line-utilities"]
 
 [lib]
-name = "mgrs2latlong"
+name = "mgrs"
 path = "src/lib.rs"
 
 [[bin]]
-name = "mgrs2latlong"
+name = "mgrs"
 path = "src/main.rs"
 
 [dependencies]

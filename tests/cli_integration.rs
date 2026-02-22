@@ -1,7 +1,7 @@
 use std::process::Command;
 
 fn cargo_bin() -> Command {
-    let bin = env!("CARGO_BIN_EXE_mgrs2latlong");
+    let bin = env!("CARGO_BIN_EXE_mgrs");
     Command::new(bin)
 }
 
