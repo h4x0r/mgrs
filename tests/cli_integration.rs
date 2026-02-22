@@ -57,3 +57,64 @@ fn test_strict_mode_exits_nonzero() {
         .expect("failed to run");
     assert!(!output.status.success(), "Strict mode should fail with invalid data");
 }
+
+#[test]
+fn test_to_latlon_kml_output() {
+    let output = cargo_bin()
+        .args(["to-latlon", "tests/fixtures/sample.csv", "--format", "kml"])
+        .output()
+        .expect("failed to run");
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert!(stdout.contains("<kml"), "Missing KML root element: {}", stdout);
+    assert!(stdout.contains("<Placemark>"), "Missing Placemark: {}", stdout);
+    assert!(stdout.contains("White House"), "Missing placemark name: {}", stdout);
+}
+
+#[test]
+fn test_to_latlon_gpx_output() {
+    let output = cargo_bin()
+        .args(["to-latlon", "tests/fixtures/sample.csv", "--format", "gpx"])
+        .output()
+        .expect("failed to run");
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert!(stdout.contains("<gpx"), "Missing GPX root element: {}", stdout);
+    assert!(stdout.contains("<wpt"), "Missing waypoint: {}", stdout);
+    assert!(stdout.contains("White House"), "Missing waypoint name: {}", stdout);
+}
+
+#[test]
+fn test_to_mgrs_csv_output() {
+    // Create a temp CSV with lat/lon data
+    let temp_dir = std::env::temp_dir();
+    let input_path = temp_dir.join("mgrs_test_latlon.csv");
+    std::fs::write(&input_path, "Name,Latitude,Longitude\nDC,38.8977,-77.0365\n").unwrap();
+
+    let output = cargo_bin()
+        .args(["to-mgrs", input_path.to_str().unwrap()])
+        .output()
+        .expect("failed to run");
+    assert!(output.status.success() || output.status.code() == Some(2));
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    assert!(stdout.contains("MGRS"), "Missing MGRS header: {}", stdout);
+    assert!(stdout.contains("18S"), "Missing MGRS grid zone: {}", stdout);
+
+    std::fs::remove_file(&input_path).ok();
+}
+
+#[test]
+fn test_output_to_file() {
+    let temp_dir = std::env::temp_dir();
+    let output_path = temp_dir.join("mgrs_test_output.csv");
+
+    let output = cargo_bin()
+        .args(["to-latlon", "tests/fixtures/sample.csv", "-o", output_path.to_str().unwrap()])
+        .output()
+        .expect("failed to run");
+    assert!(output.status.success() || output.status.code() == Some(2));
+
+    let contents = std::fs::read_to_string(&output_path).unwrap();
+    assert!(contents.contains("Latitude"), "Output file missing Latitude: {}", contents);
+    assert!(contents.contains("White House"), "Output file missing data: {}", contents);
+
+    std::fs::remove_file(&output_path).ok();
+}
