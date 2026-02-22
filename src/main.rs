@@ -1,128 +1,131 @@
-use anyhow::{Context, Result};
-use clap::Parser;
-use csv::{Reader, Writer};
-use geoconvert::Mgrs;
-use regex::Regex;
+use anyhow::Result;
+use clap::{Parser, Subcommand};
 use std::fs::File;
-use std::io::{self, BufReader, BufWriter};
+use std::io::{self, BufWriter};
+use std::process;
+use mgrs2latlong::stream::{self, FormatKind, ColumnSpec, ProcessConfig};
 
 #[derive(Parser)]
 #[command(name = "mgrs2latlong")]
-#[command(about = "Convert MGRS coordinates to latitude/longitude in CSV files")]
+#[command(about = "Convert between MGRS coordinates and latitude/longitude in CSV files")]
 #[command(author = "Albert Hui <albert@securityronin.com>")]
+#[command(version)]
 struct Cli {
-    #[arg(help = "Input CSV file path")]
+    #[command(subcommand)]
+    command: Option<Commands>,
+
+    /// Input CSV file path (for backward compatibility without subcommand)
+    input: Option<String>,
+}
+
+#[derive(Subcommand)]
+enum Commands {
+    /// Convert MGRS coordinates to latitude/longitude
+    ToLatlon(ConvertArgs),
+    /// Convert latitude/longitude to MGRS coordinates
+    ToMgrs(ConvertArgs),
+}
+
+#[derive(Parser, Clone)]
+struct ConvertArgs {
+    /// Input CSV file path
     input: String,
-    
-    #[arg(short, long, help = "Output CSV file path (defaults to stdout)")]
+
+    /// Output file path (defaults to stdout)
+    #[arg(short, long)]
     output: Option<String>,
+
+    /// Output format: csv, geojson, kml, gpx
+    #[arg(short, long, default_value = "csv")]
+    format: String,
+
+    /// Column name or index containing coordinates
+    #[arg(short, long)]
+    column: Option<String>,
+
+    /// Decimal places in output coordinates
+    #[arg(short, long, default_value = "6")]
+    precision: u8,
+
+    /// Abort on first conversion error
+    #[arg(long)]
+    strict: bool,
+
+    /// Column to use as placemark/waypoint name (KML/GPX)
+    #[arg(long)]
+    name_column: Option<String>,
 }
 
-fn is_likely_mgrs(value: &str) -> bool {
-    let mgrs_pattern = Regex::new(r"(?i)\b\d{1,2}\s*[C-X]\s*[A-Z]{2}\s*\d{2,10}\b").unwrap();
-    mgrs_pattern.is_match(value) && value.trim().len() >= 7
-}
-
-fn convert_mgrs_to_latlon(mgrs_str: &str) -> Result<(f64, f64)> {
-    let normalized_mgrs = mgrs_str.replace(" ", "");
-    let mgrs = Mgrs::parse_str(&normalized_mgrs)
-        .with_context(|| format!("Failed to parse MGRS coordinate: {}", mgrs_str))?;
-    
-    let latlon = mgrs.to_latlon();
-    Ok((latlon.latitude(), latlon.longitude()))
-}
-
-fn detect_mgrs_column(records: &[csv::StringRecord]) -> Option<usize> {
-    if records.is_empty() {
-        return None;
+fn parse_format(s: &str) -> Result<FormatKind> {
+    match s.to_lowercase().as_str() {
+        "csv" => Ok(FormatKind::Csv),
+        "geojson" => Ok(FormatKind::GeoJson),
+        "kml" => Ok(FormatKind::Kml),
+        "gpx" => Ok(FormatKind::Gpx),
+        _ => anyhow::bail!("Unknown format '{}'. Supported: csv, geojson, kml, gpx", s),
     }
-    
-    let num_columns = records[0].len();
-    let mut column_scores = vec![0; num_columns];
-    
-    for record in records.iter().take(100) {
-        for (col_idx, field) in record.iter().enumerate() {
-            if is_likely_mgrs(field.trim()) {
-                column_scores[col_idx] += 1;
-            }
-        }
-    }
-    
-    column_scores
-        .iter()
-        .enumerate()
-        .max_by_key(|&(_, score)| score)
-        .filter(|&(_, score)| *score > 0)
-        .map(|(idx, _)| idx)
 }
 
-fn process_csv(input_path: &str, output_path: Option<&str>) -> Result<()> {
-    let file = File::open(input_path)
-        .with_context(|| format!("Failed to open input file: {}", input_path))?;
-    let mut reader = Reader::from_reader(BufReader::new(file));
-    
-    let mut records = Vec::new();
-    let headers = reader.headers()?.clone();
-    
-    for result in reader.records() {
-        let record = result.with_context(|| "Failed to read CSV record")?;
-        records.push(record);
+fn parse_column(s: &str) -> ColumnSpec {
+    match s.parse::<usize>() {
+        Ok(idx) => ColumnSpec::Index(idx),
+        Err(_) => ColumnSpec::Name(s.to_string()),
     }
-    
-    let mgrs_column = detect_mgrs_column(&records)
-        .with_context(|| "No MGRS-like column detected in the CSV file")?;
-    
-    let output: Box<dyn io::Write> = match output_path {
-        Some(path) => {
-            let file = File::create(path)
-                .with_context(|| format!("Failed to create output file: {}", path))?;
-            Box::new(BufWriter::new(file))
-        }
+}
+
+fn run_to_latlon(args: &ConvertArgs) -> Result<()> {
+    let format = parse_format(&args.format)?;
+    let input = File::open(&args.input)
+        .map_err(|e| anyhow::anyhow!("Failed to open '{}': {}", args.input, e))?;
+
+    let output: Box<dyn io::Write> = match &args.output {
+        Some(path) => Box::new(BufWriter::new(File::create(path)?)),
         None => Box::new(io::stdout()),
     };
-    
-    let mut writer = Writer::from_writer(output);
-    
-    let mut new_headers = headers.iter().collect::<Vec<_>>();
-    new_headers.push("Latitude");
-    new_headers.push("Longitude");
-    writer.write_record(&new_headers)
-        .with_context(|| "Failed to write headers")?;
-    
-    for record in &records {
-        let mut new_record = record.iter().collect::<Vec<_>>();
-        
-        let mgrs_value = record.get(mgrs_column).unwrap_or("").trim();
-        
-        let (lat_str, lon_str) = if !mgrs_value.is_empty() && is_likely_mgrs(mgrs_value) {
-            match convert_mgrs_to_latlon(mgrs_value) {
-                Ok((lat, lon)) => (lat.to_string(), lon.to_string()),
-                Err(_) => (String::new(), String::new())
-            }
-        } else {
-            (String::new(), String::new())
-        };
-        
-        new_record.push(&lat_str);
-        new_record.push(&lon_str);
-        
-        writer.write_record(&new_record)
-            .with_context(|| "Failed to write record")?;
+
+    let config = ProcessConfig {
+        column: args.column.as_deref().map(parse_column),
+        strict: args.strict,
+        name_column: args.name_column.clone(),
+    };
+
+    let stats = stream::process_to_latlon(input, output, format, &config)?;
+
+    eprintln!(
+        "Processed {} rows: {} succeeded, {} failed.",
+        stats.total_rows, stats.succeeded_rows, stats.failed_rows
+    );
+
+    if stats.failed_rows > 0 && stats.succeeded_rows > 0 {
+        process::exit(2);
     }
-    
-    writer.flush()
-        .with_context(|| "Failed to flush output")?;
-    
-    println!("Processed {} records. MGRS column detected at index {}.", 
-             records.len(), mgrs_column);
-    
+
     Ok(())
 }
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
-    
-    process_csv(&cli.input, cli.output.as_deref())?;
-    
-    Ok(())
+
+    match cli.command {
+        Some(Commands::ToLatlon(args)) => run_to_latlon(&args),
+        Some(Commands::ToMgrs(_args)) => {
+            anyhow::bail!("to-mgrs is not yet implemented")
+        }
+        None => {
+            match cli.input {
+                Some(input) => run_to_latlon(&ConvertArgs {
+                    input,
+                    output: None,
+                    format: "csv".to_string(),
+                    column: None,
+                    precision: 6,
+                    strict: false,
+                    name_column: None,
+                }),
+                None => {
+                    anyhow::bail!("No input file specified. Usage: mgrs2latlong <INPUT> or mgrs2latlong to-latlon <INPUT>")
+                }
+            }
+        }
+    }
 }
