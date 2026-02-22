@@ -1,7 +1,8 @@
 use anyhow::Result;
 use clap::{Parser, Subcommand};
+use indicatif::{ProgressBar, ProgressStyle};
 use std::fs::File;
-use std::io::{self, BufWriter};
+use std::io::{self, BufRead, BufReader, BufWriter};
 use std::process;
 use mgrs2latlong::stream::{self, FormatKind, ColumnSpec, ProcessConfig};
 
@@ -73,8 +74,38 @@ fn parse_column(s: &str) -> ColumnSpec {
     }
 }
 
+fn count_lines(path: &str) -> Result<u64> {
+    let file = File::open(path)?;
+    let count = BufReader::new(file).lines().count();
+    Ok(count.saturating_sub(1) as u64) // subtract header row
+}
+
+fn create_progress_bar(total: u64) -> ProgressBar {
+    let pb = ProgressBar::new(total);
+    pb.set_style(
+        ProgressStyle::default_bar()
+            .template("{spinner:.green} [{bar:40.cyan/blue}] {pos}/{len} rows ({eta})")
+            .unwrap()
+            .progress_chars("=>-"),
+    );
+    pb
+}
+
 fn run_to_latlon(args: &ConvertArgs) -> Result<()> {
     let format = parse_format(&args.format)?;
+
+    // Show progress bar only when writing to a file (not stdout)
+    let pb = if args.output.is_some() {
+        let total = count_lines(&args.input).unwrap_or(0);
+        if total > 0 {
+            Some(create_progress_bar(total))
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
     let input = File::open(&args.input)
         .map_err(|e| anyhow::anyhow!("Failed to open '{}': {}", args.input, e))?;
 
@@ -91,6 +122,10 @@ fn run_to_latlon(args: &ConvertArgs) -> Result<()> {
 
     let stats = stream::process_to_latlon(input, output, format, &config)?;
 
+    if let Some(pb) = pb {
+        pb.finish_and_clear();
+    }
+
     eprintln!(
         "Processed {} rows: {} succeeded, {} failed.",
         stats.total_rows, stats.succeeded_rows, stats.failed_rows
@@ -105,6 +140,18 @@ fn run_to_latlon(args: &ConvertArgs) -> Result<()> {
 
 fn run_to_mgrs(args: &ConvertArgs) -> Result<()> {
     let format = parse_format(&args.format)?;
+
+    let pb = if args.output.is_some() {
+        let total = count_lines(&args.input).unwrap_or(0);
+        if total > 0 {
+            Some(create_progress_bar(total))
+        } else {
+            None
+        }
+    } else {
+        None
+    };
+
     let input = File::open(&args.input)
         .map_err(|e| anyhow::anyhow!("Failed to open '{}': {}", args.input, e))?;
 
@@ -120,6 +167,10 @@ fn run_to_mgrs(args: &ConvertArgs) -> Result<()> {
     };
 
     let stats = stream::process_to_mgrs(input, output, format, &config, args.precision)?;
+
+    if let Some(pb) = pb {
+        pb.finish_and_clear();
+    }
 
     eprintln!(
         "Processed {} rows: {} succeeded, {} failed.",
