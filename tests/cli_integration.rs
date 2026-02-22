@@ -6,12 +6,12 @@ fn cargo_bin() -> Command {
 }
 
 #[test]
-fn test_to_latlon_csv_output() {
+fn test_csv_output() {
     let output = cargo_bin()
-        .args(["to-latlon", "tests/fixtures/sample.csv"])
+        .args(["tests/fixtures/sample.csv"])
         .output()
         .expect("failed to run");
-    assert!(output.status.success() || output.status.code() == Some(2)); // exit 2 = partial failures
+    assert!(output.status.success() || output.status.code() == Some(2));
     let stdout = String::from_utf8(output.stdout).unwrap();
     assert!(stdout.contains("Latitude"), "Missing Latitude header in: {}", stdout);
     assert!(stdout.contains("Longitude"), "Missing Longitude header in: {}", stdout);
@@ -19,9 +19,9 @@ fn test_to_latlon_csv_output() {
 }
 
 #[test]
-fn test_to_latlon_geojson_output() {
+fn test_geojson_output() {
     let output = cargo_bin()
-        .args(["to-latlon", "tests/fixtures/sample.csv", "--format", "geojson"])
+        .args(["tests/fixtures/sample.csv", "--format", "geojson"])
         .output()
         .expect("failed to run");
     let stdout = String::from_utf8(output.stdout).unwrap();
@@ -30,38 +30,9 @@ fn test_to_latlon_geojson_output() {
 }
 
 #[test]
-fn test_backward_compat_no_subcommand() {
+fn test_kml_output() {
     let output = cargo_bin()
-        .args(["tests/fixtures/sample.csv"])
-        .output()
-        .expect("failed to run");
-    assert!(output.status.success() || output.status.code() == Some(2));
-    let stdout = String::from_utf8(output.stdout).unwrap();
-    assert!(stdout.contains("Latitude"), "Backward compat failed: {}", stdout);
-}
-
-#[test]
-fn test_explicit_column_flag() {
-    let output = cargo_bin()
-        .args(["to-latlon", "tests/fixtures/sample.csv", "--column", "MGRS"])
-        .output()
-        .expect("failed to run");
-    assert!(output.status.success() || output.status.code() == Some(2));
-}
-
-#[test]
-fn test_strict_mode_exits_nonzero() {
-    let output = cargo_bin()
-        .args(["to-latlon", "tests/fixtures/sample.csv", "--strict"])
-        .output()
-        .expect("failed to run");
-    assert!(!output.status.success(), "Strict mode should fail with invalid data");
-}
-
-#[test]
-fn test_to_latlon_kml_output() {
-    let output = cargo_bin()
-        .args(["to-latlon", "tests/fixtures/sample.csv", "--format", "kml"])
+        .args(["tests/fixtures/sample.csv", "--format", "kml"])
         .output()
         .expect("failed to run");
     let stdout = String::from_utf8(output.stdout).unwrap();
@@ -71,9 +42,9 @@ fn test_to_latlon_kml_output() {
 }
 
 #[test]
-fn test_to_latlon_gpx_output() {
+fn test_gpx_output() {
     let output = cargo_bin()
-        .args(["to-latlon", "tests/fixtures/sample.csv", "--format", "gpx"])
+        .args(["tests/fixtures/sample.csv", "--format", "gpx"])
         .output()
         .expect("failed to run");
     let stdout = String::from_utf8(output.stdout).unwrap();
@@ -83,14 +54,31 @@ fn test_to_latlon_gpx_output() {
 }
 
 #[test]
-fn test_to_mgrs_csv_output() {
-    // Create a temp CSV with lat/lon data
+fn test_explicit_column_flag() {
+    let output = cargo_bin()
+        .args(["tests/fixtures/sample.csv", "--column", "MGRS"])
+        .output()
+        .expect("failed to run");
+    assert!(output.status.success() || output.status.code() == Some(2));
+}
+
+#[test]
+fn test_strict_mode_exits_nonzero() {
+    let output = cargo_bin()
+        .args(["tests/fixtures/sample.csv", "--strict"])
+        .output()
+        .expect("failed to run");
+    assert!(!output.status.success(), "Strict mode should fail with invalid data");
+}
+
+#[test]
+fn test_to_mgrs_flag() {
     let temp_dir = std::env::temp_dir();
     let input_path = temp_dir.join("mgrs_test_latlon.csv");
     std::fs::write(&input_path, "Name,Latitude,Longitude\nDC,38.8977,-77.0365\n").unwrap();
 
     let output = cargo_bin()
-        .args(["to-mgrs", input_path.to_str().unwrap()])
+        .args([input_path.to_str().unwrap(), "--to-mgrs"])
         .output()
         .expect("failed to run");
     assert!(output.status.success() || output.status.code() == Some(2));
@@ -107,7 +95,7 @@ fn test_output_to_file() {
     let output_path = temp_dir.join("mgrs_test_output.csv");
 
     let output = cargo_bin()
-        .args(["to-latlon", "tests/fixtures/sample.csv", "-o", output_path.to_str().unwrap()])
+        .args(["tests/fixtures/sample.csv", "-o", output_path.to_str().unwrap()])
         .output()
         .expect("failed to run");
     assert!(output.status.success() || output.status.code() == Some(2));

@@ -8,7 +8,7 @@ Albert Hui <albert@securityronin.com>
 
 ## Features
 
-- **Bidirectional conversion**: MGRS to lat/lon (`to-latlon`) and lat/lon to MGRS (`to-mgrs`)
+- **Bidirectional conversion**: MGRS to lat/lon (default) and lat/lon to MGRS (`--to-mgrs`)
 - **Multiple output formats**: CSV, GeoJSON, KML, GPX
 - **Auto-detection**: Finds MGRS columns automatically, no configuration needed
 - **Streaming**: Processes rows one at a time — handles large files without loading everything into memory
@@ -35,50 +35,37 @@ The binary will be at `target/release/mgrs`.
 
 ## Usage
 
-### MGRS to Lat/Lon
-
 ```bash
-# Output CSV to stdout
-mgrs to-latlon input.csv
+# Convert MGRS to lat/lon (CSV to stdout)
+mgrs input.csv
 
-# Output GeoJSON to a file
-mgrs to-latlon input.csv --format geojson -o output.geojson
+# Output as GeoJSON
+mgrs input.csv --format geojson -o output.geojson
 
-# Output KML with custom name column
-mgrs to-latlon input.csv --format kml --name-column "Site Name" -o output.kml
+# Output as KML with custom name column
+mgrs input.csv --format kml --name-column "Site Name" -o output.kml
 
-# Output GPX waypoints
-mgrs to-latlon input.csv --format gpx -o output.gpx
+# Output as GPX waypoints
+mgrs input.csv --format gpx -o output.gpx
 
 # Specify the MGRS column explicitly
-mgrs to-latlon input.csv --column "Grid Ref"
+mgrs input.csv --column "Grid Ref"
 
 # Abort on first error
-mgrs to-latlon input.csv --strict
-```
+mgrs input.csv --strict
 
-### Lat/Lon to MGRS
-
-```bash
-# Append MGRS column to CSV
-mgrs to-mgrs input.csv
+# Reverse: convert lat/lon to MGRS
+mgrs input.csv --to-mgrs
 
 # Control MGRS precision (1-5, default 6)
-mgrs to-mgrs input.csv --precision 3
-```
-
-### Backward Compatibility
-
-Running without a subcommand defaults to `to-latlon`:
-
-```bash
-mgrs input.csv
+mgrs input.csv --to-mgrs --precision 3
 ```
 
 ## Flags
 
 | Flag | Short | Description | Default |
 |------|-------|-------------|---------|
+| `--to-mgrs` | | Convert lat/lon to MGRS (default is MGRS to lat/lon) | off |
 | `--format` | `-f` | Output format: `csv`, `geojson`, `kml`, `gpx` | `csv` |
 | `--output` | `-o` | Output file path (omit for stdout) | stdout |
 | `--column` | `-c` | Column name or index containing coordinates | auto-detect |
@@ -89,8 +76,8 @@ mgrs input.csv
 ## Input Format
 
 CSV files with either:
-- An **MGRS column** (for `to-latlon`): values like `18SUJ2337006519` or `18S UJ 23370 06519`
-- **Latitude/Longitude columns** (for `to-mgrs`): columns with names containing "lat" and "lon"/"lng"
+- An **MGRS column** (default mode): values like `18SUJ2337006519` or `18S UJ 23370 06519`
+- **Latitude/Longitude columns** (`--to-mgrs` mode): columns with names containing "lat" and "lon"/"lng"
 
 ## Output Formats
 

@@ -1,5 +1,5 @@
 use anyhow::Result;
-use clap::{Parser, Subcommand};
+use clap::Parser;
 use indicatif::{ProgressBar, ProgressStyle};
 use std::fs::File;
 use std::io::{self, BufRead, BufReader, BufWriter};
@@ -12,25 +12,12 @@ use mgrs::stream::{self, FormatKind, ColumnSpec, ProcessConfig};
 #[command(author = "Albert Hui <albert@securityronin.com>")]
 #[command(version)]
 struct Cli {
-    #[command(subcommand)]
-    command: Option<Commands>,
-
-    /// Input CSV file path (for backward compatibility without subcommand)
-    input: Option<String>,
-}
-
-#[derive(Subcommand)]
-enum Commands {
-    /// Convert MGRS coordinates to latitude/longitude
-    ToLatlon(ConvertArgs),
-    /// Convert latitude/longitude to MGRS coordinates
-    ToMgrs(ConvertArgs),
-}
-
-#[derive(Parser, Clone)]
-struct ConvertArgs {
     /// Input CSV file path
     input: String,
+
+    /// Convert lat/lon to MGRS (default is MGRS to lat/lon)
+    #[arg(long)]
+    to_mgrs: bool,
 
     /// Output file path (defaults to stdout)
     #[arg(short, long)]
@@ -77,7 +64,7 @@ fn parse_column(s: &str) -> ColumnSpec {
 fn count_lines(path: &str) -> Result<u64> {
     let file = File::open(path)?;
     let count = BufReader::new(file).lines().count();
-    Ok(count.saturating_sub(1) as u64) // subtract header row
+    Ok(count.saturating_sub(1) as u64)
 }
 
 fn create_progress_bar(total: u64) -> ProgressBar {
@@ -91,120 +78,54 @@ fn create_progress_bar(total: u64) -> ProgressBar {
     pb
 }
 
-fn run_to_latlon(args: &ConvertArgs) -> Result<()> {
-    let format = parse_format(&args.format)?;
-
-    // Show progress bar only when writing to a file (not stdout)
-    let pb = if args.output.is_some() {
-        let total = count_lines(&args.input).unwrap_or(0);
-        if total > 0 {
-            Some(create_progress_bar(total))
-        } else {
-            None
-        }
-    } else {
-        None
-    };
-
-    let input = File::open(&args.input)
-        .map_err(|e| anyhow::anyhow!("Failed to open '{}': {}", args.input, e))?;
-
-    let output: Box<dyn io::Write> = match &args.output {
-        Some(path) => Box::new(BufWriter::new(File::create(path)?)),
-        None => Box::new(io::stdout()),
-    };
-
-    let config = ProcessConfig {
-        column: args.column.as_deref().map(parse_column),
-        strict: args.strict,
-        name_column: args.name_column.clone(),
-    };
-
-    let stats = stream::process_to_latlon(input, output, format, &config)?;
-
-    if let Some(pb) = pb {
-        pb.finish_and_clear();
-    }
-
-    eprintln!(
-        "Processed {} rows: {} succeeded, {} failed.",
-        stats.total_rows, stats.succeeded_rows, stats.failed_rows
-    );
-
-    if stats.failed_rows > 0 && stats.succeeded_rows > 0 {
-        process::exit(2);
-    }
-
-    Ok(())
-}
-
-fn run_to_mgrs(args: &ConvertArgs) -> Result<()> {
-    let format = parse_format(&args.format)?;
-
-    let pb = if args.output.is_some() {
-        let total = count_lines(&args.input).unwrap_or(0);
-        if total > 0 {
-            Some(create_progress_bar(total))
-        } else {
-            None
-        }
-    } else {
-        None
-    };
-
-    let input = File::open(&args.input)
-        .map_err(|e| anyhow::anyhow!("Failed to open '{}': {}", args.input, e))?;
-
-    let output: Box<dyn io::Write> = match &args.output {
-        Some(path) => Box::new(BufWriter::new(File::create(path)?)),
-        None => Box::new(io::stdout()),
-    };
-
-    let config = ProcessConfig {
-        column: args.column.as_deref().map(parse_column),
-        strict: args.strict,
-        name_column: args.name_column.clone(),
-    };
-
-    let stats = stream::process_to_mgrs(input, output, format, &config, args.precision)?;
-
-    if let Some(pb) = pb {
-        pb.finish_and_clear();
-    }
-
-    eprintln!(
-        "Processed {} rows: {} succeeded, {} failed.",
-        stats.total_rows, stats.succeeded_rows, stats.failed_rows
-    );
-
-    if stats.failed_rows > 0 && stats.succeeded_rows > 0 {
-        process::exit(2);
-    }
-
-    Ok(())
-}
-
 fn main() -> Result<()> {
     let cli = Cli::parse();
 
-    match cli.command {
-        Some(Commands::ToLatlon(args)) => run_to_latlon(&args),
-        Some(Commands::ToMgrs(args)) => run_to_mgrs(&args),
-        None => {
-            match cli.input {
-                Some(input) => run_to_latlon(&ConvertArgs {
-                    input,
-                    output: None,
-                    format: "csv".to_string(),
-                    column: None,
-                    precision: 6,
-                    strict: false,
-                    name_column: None,
-                }),
-                None => {
-                    anyhow::bail!("No input file specified. Usage: mgrs <INPUT> or mgrs to-latlon <INPUT>")
-                }
-            }
+    let format = parse_format(&cli.format)?;
+
+    let pb = if cli.output.is_some() {
+        let total = count_lines(&cli.input).unwrap_or(0);
+        if total > 0 {
+            Some(create_progress_bar(total))
+        } else {
+            None
         }
+    } else {
+        None
+    };
+
+    let input = File::open(&cli.input)
+        .map_err(|e| anyhow::anyhow!("Failed to open '{}': {}", cli.input, e))?;
+
+    let output: Box<dyn io::Write> = match &cli.output {
+        Some(path) => Box::new(BufWriter::new(File::create(path)?)),
+        None => Box::new(io::stdout()),
+    };
+
+    let config = ProcessConfig {
+        column: cli.column.as_deref().map(parse_column),
+        strict: cli.strict,
+        name_column: cli.name_column.clone(),
+    };
+
+    let stats = if cli.to_mgrs {
+        stream::process_to_mgrs(input, output, format, &config, cli.precision)?
+    } else {
+        stream::process_to_latlon(input, output, format, &config)?
+    };
+
+    if let Some(pb) = pb {
+        pb.finish_and_clear();
     }
+
+    eprintln!(
+        "Processed {} rows: {} succeeded, {} failed.",
+        stats.total_rows, stats.succeeded_rows, stats.failed_rows
+    );
+
+    if stats.failed_rows > 0 && stats.succeeded_rows > 0 {
+        process::exit(2);
+    }
+
+    Ok(())
 }
