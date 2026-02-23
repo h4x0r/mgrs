@@ -24,7 +24,7 @@ geopackage = ["dep:rusqlite"]
 flatgeobuf-format = ["dep:flatgeobuf", "dep:geozero"]
 
 [dependencies]
-clap = { version = "4.0", features = ["derive"] }
+clap = { version = "4.5", features = ["derive"] }
 csv = "1.3"
 regex = "1.10"
 geoconvert = "1.0"
