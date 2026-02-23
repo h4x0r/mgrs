@@ -23,10 +23,14 @@ Albert Hui <albert@securityronin.com>
 cargo install mgrs
 ```
 
+### Windows binary
+
+Download `mgrs.exe` from the [latest release](https://github.com/h4x0r/mgrs/releases/latest).
+
 ### From source
 
 ```bash
-git clone https://github.com/4n6h4x0r/mgrs.git
+git clone https://github.com/h4x0r/mgrs.git
 cd mgrs
 cargo build --release
 ```
@@ -102,7 +106,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-mgrs = "0.2"
+mgrs = "0.3"
 ```
 
 ```rust
