@@ -1,6 +1,6 @@
 [package]
 name = "mgrs"
-version = "0.4.1"
+version = "0.4.2"
 edition = "2021"
 authors = ["Albert Hui <albert@securityronin.com>"]
 description = "Bidirectional MGRS/lat-long coordinate conversion CLI with multi-format I/O: CSV, GeoJSON, KML, KMZ, GPX, WKT, TopoJSON, Shapefile, GeoPackage, FlatGeobuf"
