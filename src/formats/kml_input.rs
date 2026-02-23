@@ -1,6 +1,6 @@
-use std::io::Read;
-use anyhow::Result;
 use crate::formats::{InputFormat, InputRecord};
+use anyhow::Result;
+use std::io::Read;
 
 pub struct KmlInput {
     headers: Vec<String>,
@@ -20,7 +20,9 @@ impl KmlInput {
         key_order.push("Name".to_string());
         for pm in &placemarks {
             for (k, _) in &pm.data {
-                if !key_order.contains(k) { key_order.push(k.clone()); }
+                if !key_order.contains(k) {
+                    key_order.push(k.clone());
+                }
             }
         }
 
@@ -31,18 +33,34 @@ impl KmlInput {
                 if key == "Name" {
                     fields.push(("Name".into(), pm.name.clone()));
                 } else {
-                    let val = pm.data.iter().find(|(k,_)| k == key)
-                        .map(|(_,v)| v.clone()).unwrap_or_default();
+                    let val = pm
+                        .data
+                        .iter()
+                        .find(|(k, _)| k == key)
+                        .map(|(_, v)| v.clone())
+                        .unwrap_or_default();
                     fields.push((key.clone(), val));
                 }
             }
-            records.push(InputRecord { fields, latitude: pm.lat, longitude: pm.lon });
+            records.push(InputRecord {
+                fields,
+                latitude: pm.lat,
+                longitude: pm.lon,
+            });
         }
-        Ok(Self { headers: key_order, records: records.into_iter() })
+        Ok(Self {
+            headers: key_order,
+            records: records.into_iter(),
+        })
     }
 }
 
-struct Placemark { name: String, lat: Option<f64>, lon: Option<f64>, data: Vec<(String, String)> }
+struct Placemark {
+    name: String,
+    lat: Option<f64>,
+    lon: Option<f64>,
+    data: Vec<(String, String)>,
+}
 
 fn extract_placemarks(xml: &str) -> Vec<Placemark> {
     let mut out = Vec::new();
@@ -50,21 +68,27 @@ fn extract_placemarks(xml: &str) -> Vec<Placemark> {
     while let Some(s) = xml[pos..].find("<Placemark>") {
         let s = pos + s;
         let e = match xml[s..].find("</Placemark>") {
-            Some(e) => s + e + "</Placemark>".len(), None => break,
+            Some(e) => s + e + "</Placemark>".len(),
+            None => break,
         };
         let block = &xml[s..e];
         let name = tag_content(block, "name").unwrap_or_default();
         let (lat, lon) = parse_coords(block);
         let data = parse_extended_data(block);
-        out.push(Placemark { name, lat, lon, data });
+        out.push(Placemark {
+            name,
+            lat,
+            lon,
+            data,
+        });
         pos = e;
     }
     out
 }
 
 fn tag_content(xml: &str, tag: &str) -> Option<String> {
-    let open = format!("<{}>", tag);
-    let close = format!("</{}>", tag);
+    let open = format!("<{tag}>");
+    let close = format!("</{tag}>");
     let s = xml.find(&open)? + open.len();
     let e = xml[s..].find(&close)? + s;
     Some(unescape(&xml[s..e]))
@@ -86,9 +110,15 @@ fn parse_extended_data(xml: &str) -> Vec<(String, String)> {
     while let Some(s) = xml[pos..].find("<Data name=\"") {
         let s = pos + s;
         let ns = s + "<Data name=\"".len();
-        let ne = match xml[ns..].find('"') { Some(e) => ns + e, None => break };
+        let ne = match xml[ns..].find('"') {
+            Some(e) => ns + e,
+            None => break,
+        };
         let name = unescape(&xml[ns..ne]);
-        let de = match xml[s..].find("</Data>") { Some(e) => s + e, None => break };
+        let de = match xml[s..].find("</Data>") {
+            Some(e) => s + e,
+            None => break,
+        };
         let val = tag_content(&xml[s..de], "value").unwrap_or_default();
         data.push((name, val));
         pos = de + "</Data>".len();
@@ -97,13 +127,20 @@ fn parse_extended_data(xml: &str) -> Vec<(String, String)> {
 }
 
 fn unescape(s: &str) -> String {
-    s.replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">")
-     .replace("&quot;", "\"").replace("&apos;", "'")
+    s.replace("&amp;", "&")
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&quot;", "\"")
+        .replace("&apos;", "'")
 }
 
 impl InputFormat for KmlInput {
-    fn headers(&self) -> Vec<String> { self.headers.clone() }
-    fn next_record(&mut self) -> Result<Option<InputRecord>> { Ok(self.records.next()) }
+    fn headers(&self) -> Vec<String> {
+        self.headers.clone()
+    }
+    fn next_record(&mut self) -> Result<Option<InputRecord>> {
+        Ok(self.records.next())
+    }
 }
 
 #[cfg(test)]
@@ -144,7 +181,7 @@ mod tests {
         let mut r = KmlInput::new(Cursor::new(sample())).unwrap();
         assert!(r.headers().contains(&"MGRS".to_string()));
         let rec = r.next_record().unwrap().unwrap();
-        let name = rec.fields.iter().find(|(k,_)| k == "Name").unwrap();
+        let name = rec.fields.iter().find(|(k, _)| k == "Name").unwrap();
         assert_eq!(name.1, "White House");
     }
 
@@ -157,9 +194,13 @@ mod tests {
             let mut w = KmlOutput::new(&mut buf, None);
             w.write_header(&["Name".into()]).unwrap();
             w.write_row(&ConvertedRow {
-                fields: vec!["DC".into()], headers: vec!["Name".into()],
-                latitude: Some(38.8977), longitude: Some(-77.0365), mgrs_source: None,
-            }).unwrap();
+                fields: vec!["DC".into()],
+                headers: vec!["Name".into()],
+                latitude: Some(38.8977),
+                longitude: Some(-77.0365),
+                mgrs_source: None,
+            })
+            .unwrap();
             w.finish().unwrap();
         }
         let mut r = KmlInput::new(Cursor::new(&buf)).unwrap();

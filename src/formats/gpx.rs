@@ -1,7 +1,7 @@
-use std::io::Write;
-use anyhow::Result;
-use crate::formats::{ConvertedRow, OutputFormat};
 use crate::formats::kml::escape_xml;
+use crate::formats::{ConvertedRow, OutputFormat};
+use anyhow::Result;
+use std::io::Write;
 
 pub struct GpxOutput<W: Write> {
     output: W,
@@ -48,8 +48,7 @@ impl<W: Write> OutputFormat for GpxOutput<W> {
 
         let name = self.get_name(row);
         self.waypoints.push(format!(
-            "  <wpt lat=\"{}\" lon=\"{}\">\n    <name>{}</name>\n  </wpt>",
-            lat, lon, name
+            "  <wpt lat=\"{lat}\" lon=\"{lon}\">\n    <name>{name}</name>\n  </wpt>"
         ));
         Ok(())
     }
@@ -76,13 +75,15 @@ mod tests {
         {
             let mut writer = GpxOutput::new(&mut buf, None);
             writer.write_header(&["Name".to_string()]).unwrap();
-            writer.write_row(&ConvertedRow {
-                fields: vec!["White House".to_string()],
-                headers: vec!["Name".to_string()],
-                latitude: Some(38.8977),
-                longitude: Some(-77.0365),
-                mgrs_source: None,
-            }).unwrap();
+            writer
+                .write_row(&ConvertedRow {
+                    fields: vec!["White House".to_string()],
+                    headers: vec!["Name".to_string()],
+                    latitude: Some(38.8977),
+                    longitude: Some(-77.0365),
+                    mgrs_source: None,
+                })
+                .unwrap();
             writer.finish().unwrap();
         }
         let output = String::from_utf8(buf).unwrap();
@@ -100,13 +101,15 @@ mod tests {
         {
             let mut writer = GpxOutput::new(&mut buf, None);
             writer.write_header(&["Name".to_string()]).unwrap();
-            writer.write_row(&ConvertedRow {
-                fields: vec!["NoCoords".to_string()],
-                headers: vec!["Name".to_string()],
-                latitude: None,
-                longitude: None,
-                mgrs_source: None,
-            }).unwrap();
+            writer
+                .write_row(&ConvertedRow {
+                    fields: vec!["NoCoords".to_string()],
+                    headers: vec!["Name".to_string()],
+                    latitude: None,
+                    longitude: None,
+                    mgrs_source: None,
+                })
+                .unwrap();
             writer.finish().unwrap();
         }
         let output = String::from_utf8(buf).unwrap();
@@ -118,14 +121,18 @@ mod tests {
         let mut buf = Vec::new();
         {
             let mut writer = GpxOutput::new(&mut buf, Some("Site".to_string()));
-            writer.write_header(&["ID".to_string(), "Site".to_string()]).unwrap();
-            writer.write_row(&ConvertedRow {
-                fields: vec!["1".to_string(), "Alpha".to_string()],
-                headers: vec!["ID".to_string(), "Site".to_string()],
-                latitude: Some(51.0),
-                longitude: Some(-0.1),
-                mgrs_source: None,
-            }).unwrap();
+            writer
+                .write_header(&["ID".to_string(), "Site".to_string()])
+                .unwrap();
+            writer
+                .write_row(&ConvertedRow {
+                    fields: vec!["1".to_string(), "Alpha".to_string()],
+                    headers: vec!["ID".to_string(), "Site".to_string()],
+                    latitude: Some(51.0),
+                    longitude: Some(-0.1),
+                    mgrs_source: None,
+                })
+                .unwrap();
             writer.finish().unwrap();
         }
         let output = String::from_utf8(buf).unwrap();

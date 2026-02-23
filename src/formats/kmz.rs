@@ -1,9 +1,9 @@
-use std::io::{Cursor, Read, Write};
-use anyhow::{Context, Result};
-use zip::write::SimpleFileOptions;
-use crate::formats::{ConvertedRow, OutputFormat, InputFormat, InputRecord};
 use crate::formats::kml::KmlOutput;
 use crate::formats::kml_input::KmlInput;
+use crate::formats::{ConvertedRow, InputFormat, InputRecord, OutputFormat};
+use anyhow::{Context, Result};
+use std::io::{Cursor, Read, Write};
+use zip::write::SimpleFileOptions;
 
 /// Writes KMZ (zipped KML) output. Buffers KML internally, then wraps in ZIP on finish.
 pub struct KmzOutput<W: Write> {
@@ -60,7 +60,8 @@ impl KmzInput {
     pub fn new<R: Read + std::io::Seek>(input: R) -> Result<Self> {
         let mut archive = zip::ZipArchive::new(input).context("Failed to read KMZ archive")?;
         let mut kml_content = String::new();
-        archive.by_name("doc.kml")
+        archive
+            .by_name("doc.kml")
             .context("KMZ archive missing doc.kml")?
             .read_to_string(&mut kml_content)?;
         let inner = KmlInput::from_kml_string(&kml_content)?;
@@ -69,14 +70,18 @@ impl KmzInput {
 }
 
 impl InputFormat for KmzInput {
-    fn headers(&self) -> Vec<String> { self.inner.headers() }
-    fn next_record(&mut self) -> Result<Option<InputRecord>> { self.inner.next_record() }
+    fn headers(&self) -> Vec<String> {
+        self.inner.headers()
+    }
+    fn next_record(&mut self) -> Result<Option<InputRecord>> {
+        self.inner.next_record()
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::formats::{ConvertedRow, OutputFormat, InputFormat};
+    use crate::formats::{ConvertedRow, InputFormat, OutputFormat};
     use std::io::Cursor;
 
     #[test]
@@ -86,15 +91,19 @@ mod tests {
             let mut w = KmzOutput::new(&mut buf, None);
             w.write_header(&["Name".into()]).unwrap();
             w.write_row(&ConvertedRow {
-                fields: vec!["DC".into()], headers: vec!["Name".into()],
-                latitude: Some(38.8977), longitude: Some(-77.0365), mgrs_source: None,
-            }).unwrap();
+                fields: vec!["DC".into()],
+                headers: vec!["Name".into()],
+                latitude: Some(38.8977),
+                longitude: Some(-77.0365),
+                mgrs_source: None,
+            })
+            .unwrap();
             w.finish().unwrap();
         }
         // Verify it's a valid ZIP archive
         let reader = Cursor::new(&buf);
         let archive = zip::ZipArchive::new(reader).expect("output should be valid ZIP");
-        assert!(archive.len() > 0);
+        assert!(!archive.is_empty());
     }
 
     #[test]
@@ -104,9 +113,13 @@ mod tests {
             let mut w = KmzOutput::new(&mut buf, None);
             w.write_header(&["Name".into()]).unwrap();
             w.write_row(&ConvertedRow {
-                fields: vec!["DC".into()], headers: vec!["Name".into()],
-                latitude: Some(38.8977), longitude: Some(-77.0365), mgrs_source: None,
-            }).unwrap();
+                fields: vec!["DC".into()],
+                headers: vec!["Name".into()],
+                latitude: Some(38.8977),
+                longitude: Some(-77.0365),
+                mgrs_source: None,
+            })
+            .unwrap();
             w.finish().unwrap();
         }
         let reader = Cursor::new(&buf);
@@ -122,15 +135,23 @@ mod tests {
             let mut w = KmzOutput::new(&mut buf, None);
             w.write_header(&["Name".into()]).unwrap();
             w.write_row(&ConvertedRow {
-                fields: vec!["DC".into()], headers: vec!["Name".into()],
-                latitude: Some(38.8977), longitude: Some(-77.0365), mgrs_source: None,
-            }).unwrap();
+                fields: vec!["DC".into()],
+                headers: vec!["Name".into()],
+                latitude: Some(38.8977),
+                longitude: Some(-77.0365),
+                mgrs_source: None,
+            })
+            .unwrap();
             w.finish().unwrap();
         }
         let reader = Cursor::new(&buf);
         let mut archive = zip::ZipArchive::new(reader).unwrap();
         let mut kml_content = String::new();
-        archive.by_name("doc.kml").unwrap().read_to_string(&mut kml_content).unwrap();
+        archive
+            .by_name("doc.kml")
+            .unwrap()
+            .read_to_string(&mut kml_content)
+            .unwrap();
         assert!(kml_content.contains("<?xml"));
         assert!(kml_content.contains("<kml"));
         assert!(kml_content.contains("<Placemark>"));
@@ -145,9 +166,13 @@ mod tests {
             let mut w = KmzOutput::new(&mut buf, None);
             w.write_header(&["Name".into()]).unwrap();
             w.write_row(&ConvertedRow {
-                fields: vec!["DC".into()], headers: vec!["Name".into()],
-                latitude: Some(38.8977), longitude: Some(-77.0365), mgrs_source: None,
-            }).unwrap();
+                fields: vec!["DC".into()],
+                headers: vec!["Name".into()],
+                latitude: Some(38.8977),
+                longitude: Some(-77.0365),
+                mgrs_source: None,
+            })
+            .unwrap();
             w.finish().unwrap();
         }
         let mut r = KmzInput::new(Cursor::new(&buf)).unwrap();
@@ -164,8 +189,11 @@ mod tests {
             w.write_row(&ConvertedRow {
                 fields: vec!["1".into(), "Pentagon".into()],
                 headers: vec!["ID".into(), "Location".into()],
-                latitude: Some(38.8719), longitude: Some(-77.0563), mgrs_source: None,
-            }).unwrap();
+                latitude: Some(38.8719),
+                longitude: Some(-77.0563),
+                mgrs_source: None,
+            })
+            .unwrap();
             w.finish().unwrap();
         }
         let mut r = KmzInput::new(Cursor::new(&buf)).unwrap();

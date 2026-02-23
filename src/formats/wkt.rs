@@ -1,6 +1,6 @@
-use std::io::{Read, Write, BufRead, BufReader};
+use crate::formats::{ConvertedRow, InputFormat, InputRecord, OutputFormat};
 use anyhow::Result;
-use crate::formats::{ConvertedRow, OutputFormat, InputFormat, InputRecord};
+use std::io::{BufRead, BufReader, Read, Write};
 
 pub struct WktOutput<W: Write> {
     output: W,
@@ -13,11 +13,13 @@ impl<W: Write> WktOutput<W> {
 }
 
 impl<W: Write> OutputFormat for WktOutput<W> {
-    fn write_header(&mut self, _headers: &[String]) -> Result<()> { Ok(()) }
+    fn write_header(&mut self, _headers: &[String]) -> Result<()> {
+        Ok(())
+    }
 
     fn write_row(&mut self, row: &ConvertedRow) -> Result<()> {
         if let (Some(lat), Some(lon)) = (row.latitude, row.longitude) {
-            writeln!(self.output, "POINT({} {})", lon, lat)?;
+            writeln!(self.output, "POINT({lon} {lat})")?;
         }
         Ok(())
     }
@@ -39,22 +41,30 @@ impl WktInput {
         for line in reader.lines() {
             let line = line?;
             let trimmed = line.trim();
-            if trimmed.is_empty() { continue; }
+            if trimmed.is_empty() {
+                continue;
+            }
             if let Some((lon, lat)) = parse_wkt_point(trimmed) {
                 points.push((lat, lon));
             }
         }
-        Ok(Self { records: points.into_iter() })
+        Ok(Self {
+            records: points.into_iter(),
+        })
     }
 }
 
 fn parse_wkt_point(s: &str) -> Option<(f64, f64)> {
     let upper = s.trim().to_uppercase();
-    if !upper.starts_with("POINT") { return None; }
+    if !upper.starts_with("POINT") {
+        return None;
+    }
     let rest = s.trim()[5..].trim();
     let inner = rest.strip_prefix('(')?.strip_suffix(')')?;
     let parts: Vec<&str> = inner.split_whitespace().collect();
-    if parts.len() != 2 { return None; }
+    if parts.len() != 2 {
+        return None;
+    }
     Some((parts[0].parse().ok()?, parts[1].parse().ok()?))
 }
 
@@ -89,10 +99,13 @@ mod tests {
         let mut w = WktOutput::new(&mut buf);
         w.write_header(&["Name".into()]).unwrap();
         w.write_row(&ConvertedRow {
-            fields: vec!["DC".into()], headers: vec!["Name".into()],
-            latitude: Some(38.8977), longitude: Some(-77.0365),
+            fields: vec!["DC".into()],
+            headers: vec!["Name".into()],
+            latitude: Some(38.8977),
+            longitude: Some(-77.0365),
             mgrs_source: None,
-        }).unwrap();
+        })
+        .unwrap();
         w.finish().unwrap();
         let out = String::from_utf8(buf).unwrap();
         assert_eq!(out.trim(), "POINT(-77.0365 38.8977)");
@@ -105,10 +118,13 @@ mod tests {
         w.write_header(&[]).unwrap();
         for i in 0..3 {
             w.write_row(&ConvertedRow {
-                fields: vec![], headers: vec![],
-                latitude: Some(38.0 + i as f64), longitude: Some(-77.0 + i as f64),
+                fields: vec![],
+                headers: vec![],
+                latitude: Some(38.0 + i as f64),
+                longitude: Some(-77.0 + i as f64),
                 mgrs_source: None,
-            }).unwrap();
+            })
+            .unwrap();
         }
         w.finish().unwrap();
         let out = String::from_utf8(buf).unwrap();
@@ -122,9 +138,13 @@ mod tests {
         let mut w = WktOutput::new(&mut buf);
         w.write_header(&[]).unwrap();
         w.write_row(&ConvertedRow {
-            fields: vec![], headers: vec![],
-            latitude: None, longitude: None, mgrs_source: None,
-        }).unwrap();
+            fields: vec![],
+            headers: vec![],
+            latitude: None,
+            longitude: None,
+            mgrs_source: None,
+        })
+        .unwrap();
         w.finish().unwrap();
         assert!(String::from_utf8(buf).unwrap().trim().is_empty());
     }
@@ -151,10 +171,13 @@ mod tests {
         let mut w = WktOutput::new(&mut buf);
         w.write_header(&[]).unwrap();
         w.write_row(&ConvertedRow {
-            fields: vec![], headers: vec![],
-            latitude: Some(38.8977), longitude: Some(-77.0365),
+            fields: vec![],
+            headers: vec![],
+            latitude: Some(38.8977),
+            longitude: Some(-77.0365),
             mgrs_source: None,
-        }).unwrap();
+        })
+        .unwrap();
         w.finish().unwrap();
 
         let mut r = WktInput::new(Cursor::new(&buf)).unwrap();

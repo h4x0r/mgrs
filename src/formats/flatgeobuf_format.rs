@@ -1,10 +1,12 @@
-use std::io::{Read, Write};
+use crate::formats::{ConvertedRow, InputFormat, InputRecord, OutputFormat};
 use anyhow::Result;
-use flatgeobuf::{FgbWriter, FgbReader, FallibleStreamingIterator, FeatureProperties, GeozeroGeometry};
 use flatgeobuf::{ColumnType, GeometryType};
-use geozero::{GeomProcessor, PropertyProcessor, ColumnValue};
+use flatgeobuf::{
+    FallibleStreamingIterator, FeatureProperties, FgbReader, FgbWriter, GeozeroGeometry,
+};
 use geozero::geojson::GeoJson;
-use crate::formats::{ConvertedRow, OutputFormat, InputFormat, InputRecord};
+use geozero::{ColumnValue, GeomProcessor, PropertyProcessor};
+use std::io::{Read, Write};
 
 pub struct FlatGeobufOutput<W: Write> {
     output: W,
@@ -14,7 +16,11 @@ pub struct FlatGeobufOutput<W: Write> {
 
 impl<W: Write> FlatGeobufOutput<W> {
     pub fn new(output: W) -> Self {
-        Self { output, fgb: None, headers: Vec::new() }
+        Self {
+            output,
+            fgb: None,
+            headers: Vec::new(),
+        }
     }
 }
 
@@ -36,23 +42,31 @@ impl<W: Write> OutputFormat for FlatGeobufOutput<W> {
             _ => return Ok(()),
         };
 
-        let fgb = self.fgb.as_mut().ok_or_else(|| anyhow::anyhow!("write_header not called"))?;
-        let geom_json = format!(r#"{{"type": "Point", "coordinates": [{}, {}]}}"#, lon, lat);
+        let fgb = self
+            .fgb
+            .as_mut()
+            .ok_or_else(|| anyhow::anyhow!("write_header not called"))?;
+        let geom_json = format!(r#"{{"type": "Point", "coordinates": [{lon}, {lat}]}}"#);
         let geom = GeoJson(&geom_json);
-        let fields: Vec<(usize, String)> = row.fields.iter().enumerate()
+        let fields: Vec<(usize, String)> = row
+            .fields
+            .iter()
+            .enumerate()
             .map(|(i, f)| (i, f.clone()))
             .collect();
         fgb.add_feature_geom(geom, |feat| {
             for (i, val) in &fields {
                 let _ = feat.property(*i, "", &ColumnValue::String(val));
             }
-        }).map_err(|e| anyhow::anyhow!("{}", e))?;
+        })
+        .map_err(|e| anyhow::anyhow!("{}", e))?;
         Ok(())
     }
 
     fn finish(&mut self) -> Result<()> {
         if let Some(fgb) = self.fgb.take() {
-            fgb.write(&mut self.output).map_err(|e| anyhow::anyhow!("{}", e))?;
+            fgb.write(&mut self.output)
+                .map_err(|e| anyhow::anyhow!("{}", e))?;
             self.output.flush()?;
         }
         Ok(())
@@ -66,7 +80,9 @@ struct PointCollector {
 }
 
 impl PointCollector {
-    fn new() -> Self { Self { x: None, y: None } }
+    fn new() -> Self {
+        Self { x: None, y: None }
+    }
 }
 
 impl GeomProcessor for PointCollector {
@@ -84,11 +100,21 @@ struct PropCollector {
 }
 
 impl PropCollector {
-    fn new(col_names: Vec<String>) -> Self { Self { props: Vec::new(), col_names } }
+    fn new(col_names: Vec<String>) -> Self {
+        Self {
+            props: Vec::new(),
+            col_names,
+        }
+    }
 }
 
 impl PropertyProcessor for PropCollector {
-    fn property(&mut self, idx: usize, _colname: &str, colval: &ColumnValue) -> geozero::error::Result<bool> {
+    fn property(
+        &mut self,
+        idx: usize,
+        _colname: &str,
+        colval: &ColumnValue,
+    ) -> geozero::error::Result<bool> {
         let name = self.col_names.get(idx).cloned().unwrap_or_default();
         let val = colval.to_string();
         self.props.push((name, val));
@@ -109,21 +135,27 @@ impl FlatGeobufInput {
         // Extract column names from header
         let header = reader.header();
         let col_names: Vec<String> = if let Some(columns) = header.columns() {
-            (0..columns.len()).map(|i| columns.get(i).name().to_string()).collect()
+            (0..columns.len())
+                .map(|i| columns.get(i).name().to_string())
+                .collect()
         } else {
             Vec::new()
         };
 
-        let mut iter = reader.select_all()
+        let mut iter = reader
+            .select_all()
             .map_err(|e| anyhow::anyhow!("Failed to select features: {}", e))?;
 
         let mut records = Vec::new();
-        while let Some(feature) = iter.next()
+        while let Some(feature) = iter
+            .next()
             .map_err(|e| anyhow::anyhow!("Failed to read feature: {}", e))?
         {
             // Extract geometry
             let mut gc = PointCollector::new();
-            feature.process_geom(&mut gc).map_err(|e| anyhow::anyhow!("{}", e))?;
+            feature
+                .process_geom(&mut gc)
+                .map_err(|e| anyhow::anyhow!("{}", e))?;
             let (lat, lon) = match (gc.y, gc.x) {
                 (Some(lat), Some(lon)) => (Some(lat), Some(lon)),
                 _ => (None, None),
@@ -131,24 +163,37 @@ impl FlatGeobufInput {
 
             // Extract properties
             let mut pc = PropCollector::new(col_names.clone());
-            feature.process_properties(&mut pc).map_err(|e| anyhow::anyhow!("{}", e))?;
+            feature
+                .process_properties(&mut pc)
+                .map_err(|e| anyhow::anyhow!("{}", e))?;
 
-            records.push(InputRecord { fields: pc.props, latitude: lat, longitude: lon });
+            records.push(InputRecord {
+                fields: pc.props,
+                latitude: lat,
+                longitude: lon,
+            });
         }
 
-        Ok(Self { headers: col_names, records: records.into_iter() })
+        Ok(Self {
+            headers: col_names,
+            records: records.into_iter(),
+        })
     }
 }
 
 impl InputFormat for FlatGeobufInput {
-    fn headers(&self) -> Vec<String> { self.headers.clone() }
-    fn next_record(&mut self) -> Result<Option<InputRecord>> { Ok(self.records.next()) }
+    fn headers(&self) -> Vec<String> {
+        self.headers.clone()
+    }
+    fn next_record(&mut self) -> Result<Option<InputRecord>> {
+        Ok(self.records.next())
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::formats::{ConvertedRow, OutputFormat, InputFormat};
+    use crate::formats::{ConvertedRow, InputFormat, OutputFormat};
     use std::io::Cursor;
 
     fn write_sample() -> Vec<u8> {
@@ -157,9 +202,13 @@ mod tests {
             let mut w = FlatGeobufOutput::new(&mut buf);
             w.write_header(&["Name".into()]).unwrap();
             w.write_row(&ConvertedRow {
-                fields: vec!["DC".into()], headers: vec!["Name".into()],
-                latitude: Some(38.8977), longitude: Some(-77.0365), mgrs_source: None,
-            }).unwrap();
+                fields: vec!["DC".into()],
+                headers: vec!["Name".into()],
+                latitude: Some(38.8977),
+                longitude: Some(-77.0365),
+                mgrs_source: None,
+            })
+            .unwrap();
             w.finish().unwrap();
         }
         buf
@@ -187,7 +236,7 @@ mod tests {
         let buf = write_sample();
         let mut r = FlatGeobufInput::new(Cursor::new(&buf)).unwrap();
         let rec = r.next_record().unwrap().unwrap();
-        let name = rec.fields.iter().find(|(k,_)| k == "Name").unwrap();
+        let name = rec.fields.iter().find(|(k, _)| k == "Name").unwrap();
         assert_eq!(name.1, "DC");
     }
 
@@ -208,8 +257,11 @@ mod tests {
             w.write_row(&ConvertedRow {
                 fields: vec!["DC".into(), "20001".into()],
                 headers: vec!["Name".into(), "Code".into()],
-                latitude: Some(38.8977), longitude: Some(-77.0365), mgrs_source: None,
-            }).unwrap();
+                latitude: Some(38.8977),
+                longitude: Some(-77.0365),
+                mgrs_source: None,
+            })
+            .unwrap();
             w.finish().unwrap();
         }
         let mut r = FlatGeobufInput::new(Cursor::new(&buf)).unwrap();
@@ -218,9 +270,9 @@ mod tests {
         assert!(hdrs.contains(&"Code".to_string()));
         let rec = r.next_record().unwrap().unwrap();
         assert!((rec.latitude.unwrap() - 38.8977).abs() < 0.001);
-        let name = rec.fields.iter().find(|(k,_)| k == "Name").unwrap();
+        let name = rec.fields.iter().find(|(k, _)| k == "Name").unwrap();
         assert_eq!(name.1, "DC");
-        let code = rec.fields.iter().find(|(k,_)| k == "Code").unwrap();
+        let code = rec.fields.iter().find(|(k, _)| k == "Code").unwrap();
         assert_eq!(code.1, "20001");
         assert!(r.next_record().unwrap().is_none());
     }

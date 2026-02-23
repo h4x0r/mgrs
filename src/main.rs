@@ -1,11 +1,11 @@
 use anyhow::Result;
 use clap::Parser;
 use indicatif::{ProgressBar, ProgressStyle};
+use mgrs::format_detect::detect_format;
+use mgrs::stream::{self, ColumnSpec, FormatKind, ProcessConfig};
 use std::fs::File;
 use std::io::{self, BufRead, BufReader, BufWriter, Read};
 use std::process;
-use mgrs::stream::{self, FormatKind, ColumnSpec, ProcessConfig};
-use mgrs::format_detect::detect_format;
 
 #[derive(Parser)]
 #[command(name = "mgrs")]
@@ -116,7 +116,10 @@ fn main() -> Result<()> {
 
     // Validate path-based output formats require -o
     if is_path_based_format(out_format) && cli.output.is_none() {
-        anyhow::bail!("Format {:?} requires --output flag (writes to filesystem)", out_format);
+        anyhow::bail!(
+            "Format {:?} requires --output flag (writes to filesystem)",
+            out_format
+        );
     }
 
     let config = ProcessConfig {
@@ -127,7 +130,11 @@ fn main() -> Result<()> {
 
     let pb = if cli.output.is_some() && in_format == FormatKind::Csv {
         let total = count_lines(&cli.input).unwrap_or(0);
-        if total > 0 { Some(create_progress_bar(total)) } else { None }
+        if total > 0 {
+            Some(create_progress_bar(total))
+        } else {
+            None
+        }
     } else {
         None
     };
@@ -148,7 +155,12 @@ fn main() -> Result<()> {
 
         if is_path_based_format(out_format) {
             let output_path = cli.output.as_ref().unwrap(); // validated above
-            stream::process_csv_to_path(input, std::path::Path::new(output_path), out_format, &config)?
+            stream::process_csv_to_path(
+                input,
+                std::path::Path::new(output_path),
+                out_format,
+                &config,
+            )?
         } else {
             let output: Box<dyn io::Write> = match &cli.output {
                 Some(path) => Box::new(BufWriter::new(File::create(path)?)),

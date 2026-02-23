@@ -1,7 +1,7 @@
-use std::io::Write;
+use crate::formats::{ConvertedRow, OutputFormat};
 use anyhow::Result;
 use serde_json::{json, Value};
-use crate::formats::{ConvertedRow, OutputFormat};
+use std::io::Write;
 
 pub struct GeoJsonOutput<W: Write> {
     output: W,
@@ -67,14 +67,18 @@ mod tests {
         let mut buf = Vec::new();
         {
             let mut writer = GeoJsonOutput::new(&mut buf);
-            writer.write_header(&["Name".to_string(), "MGRS".to_string()]).unwrap();
-            writer.write_row(&ConvertedRow {
-                fields: vec!["DC".to_string(), "18SUJ2337006519".to_string()],
-                headers: vec!["Name".to_string(), "MGRS".to_string()],
-                latitude: Some(38.8977),
-                longitude: Some(-77.0365),
-                mgrs_source: Some("18SUJ2337006519".to_string()),
-            }).unwrap();
+            writer
+                .write_header(&["Name".to_string(), "MGRS".to_string()])
+                .unwrap();
+            writer
+                .write_row(&ConvertedRow {
+                    fields: vec!["DC".to_string(), "18SUJ2337006519".to_string()],
+                    headers: vec!["Name".to_string(), "MGRS".to_string()],
+                    latitude: Some(38.8977),
+                    longitude: Some(-77.0365),
+                    mgrs_source: Some("18SUJ2337006519".to_string()),
+                })
+                .unwrap();
             writer.finish().unwrap();
         }
         let output = String::from_utf8(buf).unwrap();
@@ -95,13 +99,15 @@ mod tests {
         {
             let mut writer = GeoJsonOutput::new(&mut buf);
             writer.write_header(&["Name".to_string()]).unwrap();
-            writer.write_row(&ConvertedRow {
-                fields: vec!["NoCoords".to_string()],
-                headers: vec!["Name".to_string()],
-                latitude: None,
-                longitude: None,
-                mgrs_source: None,
-            }).unwrap();
+            writer
+                .write_row(&ConvertedRow {
+                    fields: vec!["NoCoords".to_string()],
+                    headers: vec!["Name".to_string()],
+                    latitude: None,
+                    longitude: None,
+                    mgrs_source: None,
+                })
+                .unwrap();
             writer.finish().unwrap();
         }
         let output = String::from_utf8(buf).unwrap();
@@ -116,13 +122,15 @@ mod tests {
             let mut writer = GeoJsonOutput::new(&mut buf);
             writer.write_header(&["Name".to_string()]).unwrap();
             for i in 0..3 {
-                writer.write_row(&ConvertedRow {
-                    fields: vec![format!("Place{}", i)],
-                    headers: vec!["Name".to_string()],
-                    latitude: Some(38.0 + i as f64),
-                    longitude: Some(-77.0 + i as f64),
-                    mgrs_source: None,
-                }).unwrap();
+                writer
+                    .write_row(&ConvertedRow {
+                        fields: vec![format!("Place{}", i)],
+                        headers: vec!["Name".to_string()],
+                        latitude: Some(38.0 + i as f64),
+                        longitude: Some(-77.0 + i as f64),
+                        mgrs_source: None,
+                    })
+                    .unwrap();
             }
             writer.finish().unwrap();
         }

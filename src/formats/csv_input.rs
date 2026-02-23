@@ -1,6 +1,6 @@
-use std::io::{Read, BufReader};
-use anyhow::Result;
 use crate::formats::{InputFormat, InputRecord};
+use anyhow::Result;
+use std::io::{BufReader, Read};
 
 pub struct CsvInput {
     headers: Vec<String>,
@@ -27,7 +27,9 @@ impl InputFormat for CsvInput {
     fn next_record(&mut self) -> Result<Option<InputRecord>> {
         match self.records.next() {
             Some(record) => {
-                let fields: Vec<(String, String)> = self.headers.iter()
+                let fields: Vec<(String, String)> = self
+                    .headers
+                    .iter()
                     .zip(record.iter())
                     .map(|(h, v)| (h.clone(), v.to_string()))
                     .collect();
@@ -60,10 +62,13 @@ mod tests {
         let mut reader = CsvInput::new(Cursor::new(data)).unwrap();
 
         let rec1 = reader.next_record().unwrap().unwrap();
-        assert_eq!(rec1.fields, vec![
-            ("Name".to_string(), "A".to_string()),
-            ("MGRS".to_string(), "18SUJ2337006519".to_string()),
-        ]);
+        assert_eq!(
+            rec1.fields,
+            vec![
+                ("Name".to_string(), "A".to_string()),
+                ("MGRS".to_string(), "18SUJ2337006519".to_string()),
+            ]
+        );
         assert!(rec1.latitude.is_none());
 
         let rec2 = reader.next_record().unwrap().unwrap();

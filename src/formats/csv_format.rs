@@ -1,6 +1,6 @@
-use std::io::Write;
-use anyhow::Result;
 use crate::formats::{ConvertedRow, OutputFormat};
+use anyhow::Result;
+use std::io::Write;
 
 pub struct CsvOutput<W: Write> {
     writer: csv::Writer<W>,
@@ -47,10 +47,9 @@ mod tests {
         let mut buf = Vec::new();
         {
             let mut writer = CsvOutput::new(&mut buf);
-            writer.write_header(&[
-                "Name".to_string(),
-                "MGRS".to_string(),
-            ]).unwrap();
+            writer
+                .write_header(&["Name".to_string(), "MGRS".to_string()])
+                .unwrap();
             writer.finish().unwrap();
         }
         let output = String::from_utf8(buf).unwrap();
@@ -65,17 +64,18 @@ mod tests {
         let mut buf = Vec::new();
         {
             let mut writer = CsvOutput::new(&mut buf);
-            writer.write_header(&[
-                "Name".to_string(),
-                "MGRS".to_string(),
-            ]).unwrap();
-            writer.write_row(&ConvertedRow {
-                fields: vec!["DC".to_string(), "18SUJ2337006519".to_string()],
-                headers: vec!["Name".to_string(), "MGRS".to_string()],
-                latitude: Some(38.8977),
-                longitude: Some(-77.0365),
-                mgrs_source: Some("18SUJ2337006519".to_string()),
-            }).unwrap();
+            writer
+                .write_header(&["Name".to_string(), "MGRS".to_string()])
+                .unwrap();
+            writer
+                .write_row(&ConvertedRow {
+                    fields: vec!["DC".to_string(), "18SUJ2337006519".to_string()],
+                    headers: vec!["Name".to_string(), "MGRS".to_string()],
+                    latitude: Some(38.8977),
+                    longitude: Some(-77.0365),
+                    mgrs_source: Some("18SUJ2337006519".to_string()),
+                })
+                .unwrap();
             writer.finish().unwrap();
         }
         let output = String::from_utf8(buf).unwrap();
@@ -89,19 +89,21 @@ mod tests {
         {
             let mut writer = CsvOutput::new(&mut buf);
             writer.write_header(&["Name".to_string()]).unwrap();
-            writer.write_row(&ConvertedRow {
-                fields: vec!["Place".to_string()],
-                headers: vec!["Name".to_string()],
-                latitude: None,
-                longitude: None,
-                mgrs_source: None,
-            }).unwrap();
+            writer
+                .write_row(&ConvertedRow {
+                    fields: vec!["Place".to_string()],
+                    headers: vec!["Name".to_string()],
+                    latitude: None,
+                    longitude: None,
+                    mgrs_source: None,
+                })
+                .unwrap();
             writer.finish().unwrap();
         }
         let output = String::from_utf8(buf).unwrap();
         let lines: Vec<&str> = output.trim().lines().collect();
         assert_eq!(lines.len(), 2); // header + 1 row
-        // Row should end with two empty fields
+                                    // Row should end with two empty fields
         assert!(lines[1].ends_with(",,"));
     }
 }

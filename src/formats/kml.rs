@@ -1,6 +1,6 @@
-use std::io::Write;
-use anyhow::Result;
 use crate::formats::{ConvertedRow, OutputFormat};
+use anyhow::Result;
+use std::io::Write;
 
 pub struct KmlOutput<W: Write> {
     pub(crate) output: W,
@@ -65,8 +65,7 @@ impl<W: Write> OutputFormat for KmlOutput<W> {
         }
 
         self.placemarks.push(format!(
-            "    <Placemark>\n      <name>{}</name>\n      <ExtendedData>\n{}      </ExtendedData>\n      <Point>\n        <coordinates>{},{},0</coordinates>\n      </Point>\n    </Placemark>",
-            name, extended_data, lon, lat
+            "    <Placemark>\n      <name>{name}</name>\n      <ExtendedData>\n{extended_data}      </ExtendedData>\n      <Point>\n        <coordinates>{lon},{lat},0</coordinates>\n      </Point>\n    </Placemark>"
         ));
         Ok(())
     }
@@ -92,14 +91,18 @@ mod tests {
         let mut buf = Vec::new();
         {
             let mut writer = KmlOutput::new(&mut buf, None);
-            writer.write_header(&["Name".to_string(), "MGRS".to_string()]).unwrap();
-            writer.write_row(&ConvertedRow {
-                fields: vec!["White House".to_string(), "18SUJ2337006519".to_string()],
-                headers: vec!["Name".to_string(), "MGRS".to_string()],
-                latitude: Some(38.8977),
-                longitude: Some(-77.0365),
-                mgrs_source: Some("18SUJ2337006519".to_string()),
-            }).unwrap();
+            writer
+                .write_header(&["Name".to_string(), "MGRS".to_string()])
+                .unwrap();
+            writer
+                .write_row(&ConvertedRow {
+                    fields: vec!["White House".to_string(), "18SUJ2337006519".to_string()],
+                    headers: vec!["Name".to_string(), "MGRS".to_string()],
+                    latitude: Some(38.8977),
+                    longitude: Some(-77.0365),
+                    mgrs_source: Some("18SUJ2337006519".to_string()),
+                })
+                .unwrap();
             writer.finish().unwrap();
         }
         let output = String::from_utf8(buf).unwrap();
@@ -115,14 +118,18 @@ mod tests {
         let mut buf = Vec::new();
         {
             let mut writer = KmlOutput::new(&mut buf, Some("Location".to_string()));
-            writer.write_header(&["ID".to_string(), "Location".to_string()]).unwrap();
-            writer.write_row(&ConvertedRow {
-                fields: vec!["1".to_string(), "My Place".to_string()],
-                headers: vec!["ID".to_string(), "Location".to_string()],
-                latitude: Some(38.0),
-                longitude: Some(-77.0),
-                mgrs_source: None,
-            }).unwrap();
+            writer
+                .write_header(&["ID".to_string(), "Location".to_string()])
+                .unwrap();
+            writer
+                .write_row(&ConvertedRow {
+                    fields: vec!["1".to_string(), "My Place".to_string()],
+                    headers: vec!["ID".to_string(), "Location".to_string()],
+                    latitude: Some(38.0),
+                    longitude: Some(-77.0),
+                    mgrs_source: None,
+                })
+                .unwrap();
             writer.finish().unwrap();
         }
         let output = String::from_utf8(buf).unwrap();
@@ -135,13 +142,15 @@ mod tests {
         {
             let mut writer = KmlOutput::new(&mut buf, None);
             writer.write_header(&["Name".to_string()]).unwrap();
-            writer.write_row(&ConvertedRow {
-                fields: vec!["NoCoords".to_string()],
-                headers: vec!["Name".to_string()],
-                latitude: None,
-                longitude: None,
-                mgrs_source: None,
-            }).unwrap();
+            writer
+                .write_row(&ConvertedRow {
+                    fields: vec!["NoCoords".to_string()],
+                    headers: vec!["Name".to_string()],
+                    latitude: None,
+                    longitude: None,
+                    mgrs_source: None,
+                })
+                .unwrap();
             writer.finish().unwrap();
         }
         let output = String::from_utf8(buf).unwrap();

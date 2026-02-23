@@ -1,6 +1,6 @@
-use std::io::Read;
-use anyhow::Result;
 use crate::formats::{InputFormat, InputRecord};
+use anyhow::Result;
+use std::io::Read;
 
 pub struct GpxInput {
     headers: Vec<String>,
@@ -13,18 +13,26 @@ impl GpxInput {
         input.read_to_string(&mut xml)?;
         let waypoints = extract_waypoints(&xml);
         let headers = vec!["Name".to_string()];
-        let records: Vec<InputRecord> = waypoints.into_iter().map(|wp| {
-            InputRecord {
+        let records: Vec<InputRecord> = waypoints
+            .into_iter()
+            .map(|wp| InputRecord {
                 fields: vec![("Name".into(), wp.name)],
                 latitude: wp.lat,
                 longitude: wp.lon,
-            }
-        }).collect();
-        Ok(Self { headers, records: records.into_iter() })
+            })
+            .collect();
+        Ok(Self {
+            headers,
+            records: records.into_iter(),
+        })
     }
 }
 
-struct Waypoint { name: String, lat: Option<f64>, lon: Option<f64> }
+struct Waypoint {
+    name: String,
+    lat: Option<f64>,
+    lon: Option<f64>,
+}
 
 fn extract_waypoints(xml: &str) -> Vec<Waypoint> {
     let mut out = Vec::new();
@@ -32,7 +40,8 @@ fn extract_waypoints(xml: &str) -> Vec<Waypoint> {
     while let Some(s) = xml[pos..].find("<wpt ") {
         let s = pos + s;
         let e = match xml[s..].find("</wpt>") {
-            Some(e) => s + e + "</wpt>".len(), None => break,
+            Some(e) => s + e + "</wpt>".len(),
+            None => break,
         };
         let block = &xml[s..e];
         let lat = attr(block, "lat").and_then(|s| s.parse().ok());
@@ -45,28 +54,35 @@ fn extract_waypoints(xml: &str) -> Vec<Waypoint> {
 }
 
 fn attr(tag: &str, name: &str) -> Option<String> {
-    let pat = format!("{}=\"", name);
+    let pat = format!("{name}=\"");
     let s = tag.find(&pat)? + pat.len();
     let e = tag[s..].find('"')? + s;
     Some(tag[s..e].to_string())
 }
 
 fn tag_content(xml: &str, tag: &str) -> Option<String> {
-    let open = format!("<{}>", tag);
-    let close = format!("</{}>", tag);
+    let open = format!("<{tag}>");
+    let close = format!("</{tag}>");
     let s = xml.find(&open)? + open.len();
     let e = xml[s..].find(&close)? + s;
     Some(unescape(&xml[s..e]))
 }
 
 fn unescape(s: &str) -> String {
-    s.replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">")
-     .replace("&quot;", "\"").replace("&apos;", "'")
+    s.replace("&amp;", "&")
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&quot;", "\"")
+        .replace("&apos;", "'")
 }
 
 impl InputFormat for GpxInput {
-    fn headers(&self) -> Vec<String> { self.headers.clone() }
-    fn next_record(&mut self) -> Result<Option<InputRecord>> { Ok(self.records.next()) }
+    fn headers(&self) -> Vec<String> {
+        self.headers.clone()
+    }
+    fn next_record(&mut self) -> Result<Option<InputRecord>> {
+        Ok(self.records.next())
+    }
 }
 
 #[cfg(test)]
@@ -102,7 +118,7 @@ mod tests {
     fn test_extracts_names() {
         let mut r = GpxInput::new(Cursor::new(sample())).unwrap();
         let rec = r.next_record().unwrap().unwrap();
-        let name = rec.fields.iter().find(|(k,_)| k == "Name").unwrap();
+        let name = rec.fields.iter().find(|(k, _)| k == "Name").unwrap();
         assert_eq!(name.1, "White House");
     }
 
@@ -115,9 +131,13 @@ mod tests {
             let mut w = GpxOutput::new(&mut buf, None);
             w.write_header(&["Name".into()]).unwrap();
             w.write_row(&ConvertedRow {
-                fields: vec!["DC".into()], headers: vec!["Name".into()],
-                latitude: Some(38.8977), longitude: Some(-77.0365), mgrs_source: None,
-            }).unwrap();
+                fields: vec!["DC".into()],
+                headers: vec!["Name".into()],
+                latitude: Some(38.8977),
+                longitude: Some(-77.0365),
+                mgrs_source: None,
+            })
+            .unwrap();
             w.finish().unwrap();
         }
         let mut r = GpxInput::new(Cursor::new(&buf)).unwrap();

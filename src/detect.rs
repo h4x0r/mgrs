@@ -1,5 +1,5 @@
-use std::sync::OnceLock;
 use regex::Regex;
+use std::sync::OnceLock;
 
 fn mgrs_regex() -> &'static Regex {
     static RE: OnceLock<Regex> = OnceLock::new();
@@ -67,9 +67,7 @@ mod tests {
 
     #[test]
     fn test_detect_mgrs_column_no_mgrs() {
-        let records = vec![
-            csv::StringRecord::from(vec!["Name", "Value", "Note"]),
-        ];
+        let records = vec![csv::StringRecord::from(vec!["Name", "Value", "Note"])];
         assert_eq!(detect_mgrs_column(&records), None);
     }
 

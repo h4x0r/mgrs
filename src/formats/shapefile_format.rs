@@ -1,7 +1,7 @@
-use std::path::Path;
+use crate::formats::{ConvertedRow, InputFormat, InputRecord, PathOutputFormat};
 use anyhow::Result;
 use shapefile::dbase;
-use crate::formats::{ConvertedRow, PathOutputFormat, InputFormat, InputRecord};
+use std::path::Path;
 
 /// Truncate a field name to fit in dBase's 11-byte limit.
 fn truncate_field_name(name: &str) -> String {
@@ -23,7 +23,9 @@ impl PathOutputFormat for ShapefileOutput {
 
         let mut builder = dbase::TableWriterBuilder::new();
         for name in &truncated {
-            let field_name: dbase::FieldName = name.as_str().try_into()
+            let field_name: dbase::FieldName = name
+                .as_str()
+                .try_into()
                 .map_err(|e: &str| anyhow::anyhow!("{}", e))?;
             builder = builder.add_character_field(field_name, 254);
         }
@@ -52,7 +54,8 @@ impl PathOutputFormat for ShapefileOutput {
             );
         }
 
-        self.writer.write_shape_and_record(&point, &record)
+        self.writer
+            .write_shape_and_record(&point, &record)
             .map_err(|e| anyhow::anyhow!("Failed to write shape: {}", e))?;
         Ok(())
     }
@@ -76,8 +79,8 @@ impl ShapefileInput {
         let mut records = Vec::new();
 
         for result in reader.iter_shapes_and_records() {
-            let (shape, record) = result
-                .map_err(|e| anyhow::anyhow!("Failed to read shapefile record: {}", e))?;
+            let (shape, record) =
+                result.map_err(|e| anyhow::anyhow!("Failed to read shapefile record: {}", e))?;
 
             // Extract point coordinates
             let (lat, lon) = match shape {
@@ -98,16 +101,27 @@ impl ShapefileInput {
                 };
                 fields.push((name, val_str));
             }
-            records.push(InputRecord { fields, latitude: lat, longitude: lon });
+            records.push(InputRecord {
+                fields,
+                latitude: lat,
+                longitude: lon,
+            });
         }
 
-        Ok(Self { headers, records: records.into_iter() })
+        Ok(Self {
+            headers,
+            records: records.into_iter(),
+        })
     }
 }
 
 impl InputFormat for ShapefileInput {
-    fn headers(&self) -> Vec<String> { self.headers.clone() }
-    fn next_record(&mut self) -> Result<Option<InputRecord>> { Ok(self.records.next()) }
+    fn headers(&self) -> Vec<String> {
+        self.headers.clone()
+    }
+    fn next_record(&mut self) -> Result<Option<InputRecord>> {
+        Ok(self.records.next())
+    }
 }
 
 #[cfg(test)]
@@ -126,9 +140,13 @@ mod tests {
         {
             let mut w = ShapefileOutput::new(&path, &["Name".into()]).unwrap();
             w.write_row(&ConvertedRow {
-                fields: vec!["DC".into()], headers: vec!["Name".into()],
-                latitude: Some(38.8977), longitude: Some(-77.0365), mgrs_source: None,
-            }).unwrap();
+                fields: vec!["DC".into()],
+                headers: vec!["Name".into()],
+                latitude: Some(38.8977),
+                longitude: Some(-77.0365),
+                mgrs_source: None,
+            })
+            .unwrap();
             w.finish().unwrap();
         }
         assert!(dir.path().join("out.shp").exists());
@@ -143,13 +161,18 @@ mod tests {
         {
             let mut w = ShapefileOutput::new(&path, &["Name".into()]).unwrap();
             w.write_row(&ConvertedRow {
-                fields: vec!["DC".into()], headers: vec!["Name".into()],
-                latitude: Some(38.8977), longitude: Some(-77.0365), mgrs_source: None,
-            }).unwrap();
+                fields: vec!["DC".into()],
+                headers: vec!["Name".into()],
+                latitude: Some(38.8977),
+                longitude: Some(-77.0365),
+                mgrs_source: None,
+            })
+            .unwrap();
             w.finish().unwrap();
         }
         let mut reader = shapefile::Reader::from_path(&path).unwrap();
-        let records: Vec<_> = reader.iter_shapes_and_records()
+        let records: Vec<_> = reader
+            .iter_shapes_and_records()
             .map(|r| r.unwrap())
             .collect();
         assert_eq!(records.len(), 1);
@@ -171,12 +194,16 @@ mod tests {
             w.write_row(&ConvertedRow {
                 fields: vec!["DC".into(), "20001".into()],
                 headers: vec!["Name".into(), "Code".into()],
-                latitude: Some(38.8977), longitude: Some(-77.0365), mgrs_source: None,
-            }).unwrap();
+                latitude: Some(38.8977),
+                longitude: Some(-77.0365),
+                mgrs_source: None,
+            })
+            .unwrap();
             w.finish().unwrap();
         }
         let mut reader = shapefile::Reader::from_path(&path).unwrap();
-        let records: Vec<_> = reader.iter_shapes_and_records()
+        let records: Vec<_> = reader
+            .iter_shapes_and_records()
             .map(|r| r.unwrap())
             .collect();
         assert_eq!(records.len(), 1);
@@ -184,7 +211,7 @@ mod tests {
         let name = rec.get("Name").unwrap();
         match name {
             dbase::FieldValue::Character(Some(s)) => assert_eq!(s, "DC"),
-            other => panic!("Expected Character, got {:?}", other),
+            other => panic!("Expected Character, got {other:?}"),
         }
     }
 
@@ -196,14 +223,19 @@ mod tests {
         {
             let mut w = ShapefileOutput::new(&path, &[long_name.clone()]).unwrap();
             w.write_row(&ConvertedRow {
-                fields: vec!["val".into()], headers: vec![long_name],
-                latitude: Some(38.0), longitude: Some(-77.0), mgrs_source: None,
-            }).unwrap();
+                fields: vec!["val".into()],
+                headers: vec![long_name],
+                latitude: Some(38.0),
+                longitude: Some(-77.0),
+                mgrs_source: None,
+            })
+            .unwrap();
             w.finish().unwrap();
         }
         // Should not error — long names get truncated
         let mut reader = shapefile::Reader::from_path(&path).unwrap();
-        let records: Vec<_> = reader.iter_shapes_and_records()
+        let records: Vec<_> = reader
+            .iter_shapes_and_records()
             .map(|r| r.unwrap())
             .collect();
         assert_eq!(records.len(), 1);
@@ -216,9 +248,13 @@ mod tests {
         {
             let mut w = ShapefileOutput::new(&path, &["Name".into()]).unwrap();
             w.write_row(&ConvertedRow {
-                fields: vec!["DC".into()], headers: vec!["Name".into()],
-                latitude: Some(38.8977), longitude: Some(-77.0365), mgrs_source: None,
-            }).unwrap();
+                fields: vec!["DC".into()],
+                headers: vec!["Name".into()],
+                latitude: Some(38.8977),
+                longitude: Some(-77.0365),
+                mgrs_source: None,
+            })
+            .unwrap();
             w.finish().unwrap();
         }
         let mut r = ShapefileInput::new(&path).unwrap();
@@ -234,15 +270,19 @@ mod tests {
         {
             let mut w = ShapefileOutput::new(&path, &["Name".into()]).unwrap();
             w.write_row(&ConvertedRow {
-                fields: vec!["DC".into()], headers: vec!["Name".into()],
-                latitude: Some(38.8977), longitude: Some(-77.0365), mgrs_source: None,
-            }).unwrap();
+                fields: vec!["DC".into()],
+                headers: vec!["Name".into()],
+                latitude: Some(38.8977),
+                longitude: Some(-77.0365),
+                mgrs_source: None,
+            })
+            .unwrap();
             w.finish().unwrap();
         }
         let mut r = ShapefileInput::new(&path).unwrap();
         let rec = r.next_record().unwrap().unwrap();
         assert!((rec.latitude.unwrap() - 38.8977).abs() < 0.001);
-        let name = rec.fields.iter().find(|(k,_)| k == "Name").unwrap();
+        let name = rec.fields.iter().find(|(k, _)| k == "Name").unwrap();
         assert_eq!(name.1, "DC");
         assert!(r.next_record().unwrap().is_none());
     }

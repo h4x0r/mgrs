@@ -19,7 +19,7 @@ pub fn mgrs_to_latlon(mgrs_str: &str) -> Result<Coordinate> {
         anyhow::bail!("Empty MGRS string");
     }
     let mgrs = Mgrs::parse_str(&normalized)
-        .with_context(|| format!("Failed to parse MGRS coordinate: {}", mgrs_str))?;
+        .with_context(|| format!("Failed to parse MGRS coordinate: {mgrs_str}"))?;
     let latlon = mgrs.to_latlon();
     Ok(Coordinate {
         latitude: latlon.latitude(),
@@ -30,7 +30,7 @@ pub fn mgrs_to_latlon(mgrs_str: &str) -> Result<Coordinate> {
 /// Convert latitude/longitude to an MGRS string with given precision (1-5).
 pub fn latlon_to_mgrs(lat: f64, lon: f64, precision: u8) -> Result<MgrsCoord> {
     let latlon = LatLon::create(lat, lon)
-        .with_context(|| format!("Failed to create LatLon from ({}, {})", lat, lon))?;
+        .with_context(|| format!("Failed to create LatLon from ({lat}, {lon})"))?;
     let mgrs = latlon.to_mgrs(precision as i32);
     Ok(MgrsCoord(mgrs.to_string()))
 }
@@ -78,7 +78,12 @@ mod tests {
         // 3-digit precision = 6 digits in easting+northing
         let digits: String = result.0.chars().filter(|c| c.is_ascii_digit()).collect();
         // Grid zone (2 digits) + 6 easting/northing digits = 8 total
-        assert!(digits.len() == 8, "Expected 8 digits, got {}: {}", digits.len(), result.0);
+        assert!(
+            digits.len() == 8,
+            "Expected 8 digits, got {}: {}",
+            digits.len(),
+            result.0
+        );
     }
 
     #[test]

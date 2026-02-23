@@ -1,7 +1,7 @@
-use std::path::Path;
+use crate::formats::{ConvertedRow, InputFormat, InputRecord, PathOutputFormat};
 use anyhow::{Context, Result};
 use rusqlite::Connection;
-use crate::formats::{ConvertedRow, PathOutputFormat, InputFormat, InputRecord};
+use std::path::Path;
 
 /// Encode a WGS84 point as GeoPackage Binary (GPB).
 /// Format: GP header (8 bytes) + WKB Point (21 bytes).
@@ -26,24 +26,36 @@ fn encode_gpb_point(lon: f64, lat: f64) -> Vec<u8> {
 
 /// Decode a GeoPackage Binary point into (lat, lon).
 fn decode_gpb_point(data: &[u8]) -> Option<(f64, f64)> {
-    if data.len() < 29 { return None; }
-    if data[0] != b'G' || data[1] != b'P' { return None; }
+    if data.len() < 29 {
+        return None;
+    }
+    if data[0] != b'G' || data[1] != b'P' {
+        return None;
+    }
     // Skip 8-byte GP header, read WKB
     let wkb = &data[8..];
-    if wkb.len() < 21 { return None; }
+    if wkb.len() < 21 {
+        return None;
+    }
     let is_le = wkb[0] == 0x01;
     let geom_type = if is_le {
         u32::from_le_bytes([wkb[1], wkb[2], wkb[3], wkb[4]])
     } else {
         u32::from_be_bytes([wkb[1], wkb[2], wkb[3], wkb[4]])
     };
-    if geom_type != 1 { return None; } // Not a Point
+    if geom_type != 1 {
+        return None;
+    } // Not a Point
     let (lon, lat) = if is_le {
-        (f64::from_le_bytes(wkb[5..13].try_into().ok()?),
-         f64::from_le_bytes(wkb[13..21].try_into().ok()?))
+        (
+            f64::from_le_bytes(wkb[5..13].try_into().ok()?),
+            f64::from_le_bytes(wkb[13..21].try_into().ok()?),
+        )
     } else {
-        (f64::from_be_bytes(wkb[5..13].try_into().ok()?),
-         f64::from_be_bytes(wkb[13..21].try_into().ok()?))
+        (
+            f64::from_be_bytes(wkb[5..13].try_into().ok()?),
+            f64::from_be_bytes(wkb[13..21].try_into().ok()?),
+        )
     };
     Some((lat, lon))
 }
@@ -55,8 +67,7 @@ pub struct GeoPackageOutput {
 
 impl PathOutputFormat for GeoPackageOutput {
     fn new(path: &Path, headers: &[String]) -> Result<Self> {
-        let conn = Connection::open(path)
-            .context("Failed to create GeoPackage")?;
+        let conn = Connection::open(path).context("Failed to create GeoPackage")?;
 
         conn.execute_batch("
             PRAGMA journal_mode=WAL;
@@ -103,7 +114,7 @@ impl PathOutputFormat for GeoPackageOutput {
         let mut col_defs = vec!["fid INTEGER PRIMARY KEY AUTOINCREMENT".to_string()];
         col_defs.push("geom BLOB".to_string());
         for h in headers {
-            col_defs.push(format!("\"{}\" TEXT", h));
+            col_defs.push(format!("\"{h}\" TEXT"));
         }
         let create_sql = format!("CREATE TABLE points ({})", col_defs.join(", "));
         conn.execute(&create_sql, [])?;
@@ -118,7 +129,10 @@ impl PathOutputFormat for GeoPackageOutput {
             [],
         )?;
 
-        Ok(Self { conn, headers: headers.to_vec() })
+        Ok(Self {
+            conn,
+            headers: headers.to_vec(),
+        })
     }
 
     fn write_row(&mut self, row: &ConvertedRow) -> Result<()> {
@@ -129,11 +143,15 @@ impl PathOutputFormat for GeoPackageOutput {
 
         let geom_blob = encode_gpb_point(lon, lat);
         let placeholders: Vec<String> = (0..self.headers.len()).map(|_| "?".to_string()).collect();
-        let col_names: Vec<String> = self.headers.iter().map(|h| format!("\"{}\"", h)).collect();
+        let col_names: Vec<String> = self.headers.iter().map(|h| format!("\"{h}\"")).collect();
         let sql = format!(
             "INSERT INTO points (geom, {}) VALUES (?{})",
             col_names.join(", "),
-            if placeholders.is_empty() { String::new() } else { format!(", {}", placeholders.join(", ")) }
+            if placeholders.is_empty() {
+                String::new()
+            } else {
+                format!(", {}", placeholders.join(", "))
+            }
         );
 
         let mut params: Vec<Box<dyn rusqlite::types::ToSql>> = Vec::new();
@@ -141,7 +159,8 @@ impl PathOutputFormat for GeoPackageOutput {
         for field in &row.fields {
             params.push(Box::new(field.clone()));
         }
-        let param_refs: Vec<&dyn rusqlite::types::ToSql> = params.iter().map(|p| p.as_ref()).collect();
+        let param_refs: Vec<&dyn rusqlite::types::ToSql> =
+            params.iter().map(|p| p.as_ref()).collect();
         self.conn.execute(&sql, param_refs.as_slice())?;
         Ok(())
     }
@@ -158,22 +177,25 @@ pub struct GeoPackageInput {
 
 impl GeoPackageInput {
     pub fn new(path: &Path) -> Result<Self> {
-        let conn = Connection::open(path)
-            .context("Failed to open GeoPackage")?;
+        let conn = Connection::open(path).context("Failed to open GeoPackage")?;
 
         // Get column names (excluding fid and geom)
         let mut stmt = conn.prepare("PRAGMA table_info(points)")?;
-        let columns: Vec<String> = stmt.query_map([], |row| {
-            row.get::<_, String>(1)
-        })?.filter_map(|r| r.ok())
-        .filter(|n| n != "fid" && n != "geom")
-        .collect();
+        let columns: Vec<String> = stmt
+            .query_map([], |row| row.get::<_, String>(1))?
+            .filter_map(|r| r.ok())
+            .filter(|n| n != "fid" && n != "geom")
+            .collect();
 
         // Read all rows
-        let select_cols: Vec<String> = columns.iter().map(|c| format!("\"{}\"", c)).collect();
+        let select_cols: Vec<String> = columns.iter().map(|c| format!("\"{c}\"")).collect();
         let sql = format!(
             "SELECT geom, {} FROM points",
-            if select_cols.is_empty() { "1".to_string() } else { select_cols.join(", ") }
+            if select_cols.is_empty() {
+                "1".to_string()
+            } else {
+                select_cols.join(", ")
+            }
         );
         let mut stmt = conn.prepare(&sql)?;
         let mut records = Vec::new();
@@ -190,16 +212,27 @@ impl GeoPackageInput {
                 let val: String = row.get(i + 1).unwrap_or_default();
                 fields.push((col.clone(), val));
             }
-            records.push(InputRecord { fields, latitude: lat, longitude: lon });
+            records.push(InputRecord {
+                fields,
+                latitude: lat,
+                longitude: lon,
+            });
         }
 
-        Ok(Self { headers: columns, records: records.into_iter() })
+        Ok(Self {
+            headers: columns,
+            records: records.into_iter(),
+        })
     }
 }
 
 impl InputFormat for GeoPackageInput {
-    fn headers(&self) -> Vec<String> { self.headers.clone() }
-    fn next_record(&mut self) -> Result<Option<InputRecord>> { Ok(self.records.next()) }
+    fn headers(&self) -> Vec<String> {
+        self.headers.clone()
+    }
+    fn next_record(&mut self) -> Result<Option<InputRecord>> {
+        Ok(self.records.next())
+    }
 }
 
 #[cfg(test)]
@@ -218,13 +251,19 @@ mod tests {
         {
             let mut w = GeoPackageOutput::new(&path, &["Name".into()]).unwrap();
             w.write_row(&ConvertedRow {
-                fields: vec!["DC".into()], headers: vec!["Name".into()],
-                latitude: Some(38.8977), longitude: Some(-77.0365), mgrs_source: None,
-            }).unwrap();
+                fields: vec!["DC".into()],
+                headers: vec!["Name".into()],
+                latitude: Some(38.8977),
+                longitude: Some(-77.0365),
+                mgrs_source: None,
+            })
+            .unwrap();
             w.finish().unwrap();
         }
         let conn = Connection::open(&path).unwrap();
-        let count: i64 = conn.query_row("SELECT count(*) FROM points", [], |r| r.get(0)).unwrap();
+        let count: i64 = conn
+            .query_row("SELECT count(*) FROM points", [], |r| r.get(0))
+            .unwrap();
         assert_eq!(count, 1);
     }
 
@@ -238,8 +277,10 @@ mod tests {
         }
         let conn = Connection::open(&path).unwrap();
         let tables: Vec<String> = conn
-            .prepare("SELECT name FROM sqlite_master WHERE type='table'").unwrap()
-            .query_map([], |r| r.get(0)).unwrap()
+            .prepare("SELECT name FROM sqlite_master WHERE type='table'")
+            .unwrap()
+            .query_map([], |r| r.get(0))
+            .unwrap()
             .map(|r| r.unwrap())
             .collect();
         assert!(tables.contains(&"gpkg_spatial_ref_sys".to_string()));
@@ -257,10 +298,13 @@ mod tests {
             w.finish().unwrap();
         }
         let conn = Connection::open(&path).unwrap();
-        let srs_id: i64 = conn.query_row(
-            "SELECT srs_id FROM gpkg_spatial_ref_sys WHERE srs_name='WGS 84'",
-            [], |r| r.get(0)
-        ).unwrap();
+        let srs_id: i64 = conn
+            .query_row(
+                "SELECT srs_id FROM gpkg_spatial_ref_sys WHERE srs_name='WGS 84'",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
         assert_eq!(srs_id, 4326);
     }
 
@@ -273,18 +317,21 @@ mod tests {
             w.write_row(&ConvertedRow {
                 fields: vec!["DC".into(), "20001".into()],
                 headers: vec!["Name".into(), "Code".into()],
-                latitude: Some(38.8977), longitude: Some(-77.0365), mgrs_source: None,
-            }).unwrap();
+                latitude: Some(38.8977),
+                longitude: Some(-77.0365),
+                mgrs_source: None,
+            })
+            .unwrap();
             w.finish().unwrap();
         }
         let conn = Connection::open(&path).unwrap();
-        let name: String = conn.query_row(
-            "SELECT Name FROM points", [], |r| r.get(0)
-        ).unwrap();
+        let name: String = conn
+            .query_row("SELECT Name FROM points", [], |r| r.get(0))
+            .unwrap();
         assert_eq!(name, "DC");
-        let code: String = conn.query_row(
-            "SELECT Code FROM points", [], |r| r.get(0)
-        ).unwrap();
+        let code: String = conn
+            .query_row("SELECT Code FROM points", [], |r| r.get(0))
+            .unwrap();
         assert_eq!(code, "20001");
     }
 
@@ -295,9 +342,13 @@ mod tests {
         {
             let mut w = GeoPackageOutput::new(&path, &["Name".into()]).unwrap();
             w.write_row(&ConvertedRow {
-                fields: vec!["DC".into()], headers: vec!["Name".into()],
-                latitude: Some(38.8977), longitude: Some(-77.0365), mgrs_source: None,
-            }).unwrap();
+                fields: vec!["DC".into()],
+                headers: vec!["Name".into()],
+                latitude: Some(38.8977),
+                longitude: Some(-77.0365),
+                mgrs_source: None,
+            })
+            .unwrap();
             w.finish().unwrap();
         }
         let mut r = GeoPackageInput::new(&path).unwrap();
@@ -313,15 +364,19 @@ mod tests {
         {
             let mut w = GeoPackageOutput::new(&path, &["Name".into()]).unwrap();
             w.write_row(&ConvertedRow {
-                fields: vec!["DC".into()], headers: vec!["Name".into()],
-                latitude: Some(38.8977), longitude: Some(-77.0365), mgrs_source: None,
-            }).unwrap();
+                fields: vec!["DC".into()],
+                headers: vec!["Name".into()],
+                latitude: Some(38.8977),
+                longitude: Some(-77.0365),
+                mgrs_source: None,
+            })
+            .unwrap();
             w.finish().unwrap();
         }
         let mut r = GeoPackageInput::new(&path).unwrap();
         let rec = r.next_record().unwrap().unwrap();
         assert!((rec.latitude.unwrap() - 38.8977).abs() < 0.001);
-        let name = rec.fields.iter().find(|(k,_)| k == "Name").unwrap();
+        let name = rec.fields.iter().find(|(k, _)| k == "Name").unwrap();
         assert_eq!(name.1, "DC");
         assert!(r.next_record().unwrap().is_none());
     }

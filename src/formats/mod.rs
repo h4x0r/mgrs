@@ -1,23 +1,23 @@
 pub mod csv_format;
 pub mod csv_input;
+#[cfg(feature = "flatgeobuf-format")]
+pub mod flatgeobuf_format;
 pub mod geojson;
-pub mod kml;
-pub mod gpx;
-pub mod wkt;
 pub mod geojson_input;
-pub mod kml_input;
+#[cfg(feature = "geopackage")]
+pub mod geopackage;
+pub mod gpx;
 pub mod gpx_input;
-pub mod topojson;
+pub mod kml;
+pub mod kml_input;
 pub mod kmz;
 #[cfg(feature = "shapefile-format")]
 pub mod shapefile_format;
-#[cfg(feature = "geopackage")]
-pub mod geopackage;
-#[cfg(feature = "flatgeobuf-format")]
-pub mod flatgeobuf_format;
+pub mod topojson;
+pub mod wkt;
 
-use std::path::Path;
 use anyhow::Result;
+use std::path::Path;
 
 /// Represents a single row of converted data.
 pub struct ConvertedRow {
@@ -55,7 +55,9 @@ pub trait InputFormat {
 
 /// Trait for output formats that write to a filesystem path (e.g. Shapefile, GeoPackage).
 pub trait PathOutputFormat {
-    fn new(path: &Path, headers: &[String]) -> Result<Self> where Self: Sized;
+    fn new(path: &Path, headers: &[String]) -> Result<Self>
+    where
+        Self: Sized;
     fn write_row(&mut self, row: &ConvertedRow) -> Result<()>;
     fn finish(&mut self) -> Result<()>;
 }

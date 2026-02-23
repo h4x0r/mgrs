@@ -1,7 +1,7 @@
-use std::io::Read;
+use crate::formats::{InputFormat, InputRecord};
 use anyhow::{Context, Result};
 use serde_json::Value;
-use crate::formats::{InputFormat, InputRecord};
+use std::io::Read;
 
 pub struct GeoJsonInput {
     headers: Vec<String>,
@@ -13,7 +13,9 @@ impl GeoJsonInput {
         let mut buf = String::new();
         input.read_to_string(&mut buf)?;
         let json: Value = serde_json::from_str(&buf).context("Failed to parse GeoJSON")?;
-        let features = json.get("features").and_then(|f| f.as_array())
+        let features = json
+            .get("features")
+            .and_then(|f| f.as_array())
             .context("GeoJSON missing 'features' array")?;
 
         // Collect property keys in order
@@ -21,7 +23,9 @@ impl GeoJsonInput {
         for feat in features {
             if let Some(props) = feat.get("properties").and_then(|p| p.as_object()) {
                 for key in props.keys() {
-                    if !keys.contains(key) { keys.push(key.clone()); }
+                    if !keys.contains(key) {
+                        keys.push(key.clone());
+                    }
                 }
             }
         }
@@ -32,25 +36,37 @@ impl GeoJsonInput {
             let mut fields = Vec::new();
             if let Some(props) = feat.get("properties").and_then(|p| p.as_object()) {
                 for key in &keys {
-                    let val = props.get(key).map(|v| match v {
-                        Value::String(s) => s.clone(),
-                        Value::Null => String::new(),
-                        other => other.to_string(),
-                    }).unwrap_or_default();
+                    let val = props
+                        .get(key)
+                        .map(|v| match v {
+                            Value::String(s) => s.clone(),
+                            Value::Null => String::new(),
+                            other => other.to_string(),
+                        })
+                        .unwrap_or_default();
                     fields.push((key.clone(), val));
                 }
             }
-            records.push(InputRecord { fields, latitude: lat, longitude: lon });
+            records.push(InputRecord {
+                fields,
+                latitude: lat,
+                longitude: lon,
+            });
         }
 
-        Ok(Self { headers: keys, records: records.into_iter() })
+        Ok(Self {
+            headers: keys,
+            records: records.into_iter(),
+        })
     }
 }
 
 fn extract_point(feat: &Value) -> (Option<f64>, Option<f64>) {
     let inner = || -> Option<(f64, f64)> {
         let geom = feat.get("geometry").filter(|g| !g.is_null())?;
-        if geom.get("type")?.as_str()? != "Point" { return None; }
+        if geom.get("type")?.as_str()? != "Point" {
+            return None;
+        }
         let c = geom.get("coordinates")?.as_array()?;
         Some((c.get(1)?.as_f64()?, c.first()?.as_f64()?))
     };
@@ -61,8 +77,12 @@ fn extract_point(feat: &Value) -> (Option<f64>, Option<f64>) {
 }
 
 impl InputFormat for GeoJsonInput {
-    fn headers(&self) -> Vec<String> { self.headers.clone() }
-    fn next_record(&mut self) -> Result<Option<InputRecord>> { Ok(self.records.next()) }
+    fn headers(&self) -> Vec<String> {
+        self.headers.clone()
+    }
+    fn next_record(&mut self) -> Result<Option<InputRecord>> {
+        Ok(self.records.next())
+    }
 }
 
 #[cfg(test)]
@@ -101,7 +121,7 @@ mod tests {
         let hdrs = r.headers();
         assert!(hdrs.contains(&"Name".to_string()));
         let rec = r.next_record().unwrap().unwrap();
-        let name = rec.fields.iter().find(|(k,_)| k == "Name").unwrap();
+        let name = rec.fields.iter().find(|(k, _)| k == "Name").unwrap();
         assert_eq!(name.1, "White House");
     }
 
@@ -114,9 +134,13 @@ mod tests {
             let mut w = GeoJsonOutput::new(&mut buf);
             w.write_header(&["Name".into()]).unwrap();
             w.write_row(&ConvertedRow {
-                fields: vec!["DC".into()], headers: vec!["Name".into()],
-                latitude: Some(38.8977), longitude: Some(-77.0365), mgrs_source: None,
-            }).unwrap();
+                fields: vec!["DC".into()],
+                headers: vec!["Name".into()],
+                latitude: Some(38.8977),
+                longitude: Some(-77.0365),
+                mgrs_source: None,
+            })
+            .unwrap();
             w.finish().unwrap();
         }
         let mut r = GeoJsonInput::new(Cursor::new(&buf)).unwrap();
