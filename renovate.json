@@ -19,17 +19,16 @@
       "matchManagers": ["github-actions"],
       "matchUpdateTypes": ["digest", "minor", "patch"],
       "automerge": true
-    },
-    {
-      "description": "Group Rust toolchain updates",
-      "matchManagers": ["rust-toolchain"],
-      "groupName": "rust toolchain"
     }
   ],
-  "cargo": {
-    "enabled": true
-  },
-  "rust-toolchain": {
-    "enabled": true
-  }
+  "customManagers": [
+    {
+      "customType": "regex",
+      "fileMatch": ["(^|/)rust-toolchain\\.toml$"],
+      "matchStrings": ["channel\\s*=\\s*\"(?<currentValue>\\d+\\.\\d+\\.\\d+)\""],
+      "depNameTemplate": "rust",
+      "packageNameTemplate": "rust-lang/rust",
+      "datasourceTemplate": "github-releases"
+    }
+  ]
 }
