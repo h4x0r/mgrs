@@ -1,0 +1,35 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    "helpers:pinGitHubActionDigests",
+    ":semanticCommits"
+  ],
+  "labels": ["dependencies"],
+  "assignees": ["h4x0r"],
+  "packageRules": [
+    {
+      "description": "Auto-merge minor and patch updates for Cargo dependencies",
+      "matchManagers": ["cargo"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "automerge": true
+    },
+    {
+      "description": "Auto-merge GitHub Actions digest and minor updates",
+      "matchManagers": ["github-actions"],
+      "matchUpdateTypes": ["digest", "minor", "patch"],
+      "automerge": true
+    },
+    {
+      "description": "Group Rust toolchain updates",
+      "matchManagers": ["rust-toolchain"],
+      "groupName": "rust toolchain"
+    }
+  ],
+  "cargo": {
+    "enabled": true
+  },
+  "rust-toolchain": {
+    "enabled": true
+  }
+}

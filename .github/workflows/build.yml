@@ -23,14 +23,6 @@ jobs:
     - name: Run cargo deny
       run: cargo deny check
 
-    - name: Install pinact
-      run: |
-        wget -O - https://github.com/suzuki-shunsuke/pinact/releases/latest/download/pinact_linux_amd64.tar.gz | tar -xz
-        sudo mv pinact /usr/local/bin/
-
-    - name: Verify actions are pinned
-      run: pinact run
-
   quality:
     runs-on: ubuntu-latest
     steps:
