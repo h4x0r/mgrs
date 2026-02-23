@@ -221,7 +221,7 @@ mod tests {
         let path = dir.path().join("out.shp");
         let long_name = "VeryLongFieldName".to_string(); // > 11 chars
         {
-            let mut w = ShapefileOutput::new(&path, &[long_name.clone()]).unwrap();
+            let mut w = ShapefileOutput::new(&path, std::slice::from_ref(&long_name)).unwrap();
             w.write_row(&ConvertedRow {
                 fields: vec!["val".into()],
                 headers: vec![long_name],
