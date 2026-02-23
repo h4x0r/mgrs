@@ -3,7 +3,7 @@ use anyhow::Result;
 use crate::formats::{ConvertedRow, OutputFormat};
 
 pub struct KmlOutput<W: Write> {
-    output: W,
+    pub(crate) output: W,
     name_column: Option<String>,
     placemarks: Vec<String>,
 }

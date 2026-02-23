@@ -1,12 +1,12 @@
 [package]
 name = "mgrs"
-version = "0.3.2"
+version = "0.4.0"
 edition = "2021"
 authors = ["Albert Hui <albert@securityronin.com>"]
-description = "Bidirectional MGRS/lat-long coordinate conversion CLI with CSV, GeoJSON, KML, and GPX output"
+description = "Bidirectional MGRS/lat-long coordinate conversion CLI with multi-format I/O: CSV, GeoJSON, KML, KMZ, GPX, WKT, TopoJSON, Shapefile, GeoPackage, FlatGeobuf"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/h4x0r/mgrs"
-keywords = ["mgrs", "coordinates", "gis", "conversion", "csv"]
+keywords = ["mgrs", "coordinates", "gis", "geojson", "shapefile"]
 categories = ["command-line-utilities"]
 
 [lib]
@@ -16,6 +16,12 @@ path = "src/lib.rs"
 [[bin]]
 name = "mgrs"
 path = "src/main.rs"
+
+[features]
+default = ["shapefile-format", "geopackage", "flatgeobuf-format"]
+shapefile-format = ["dep:shapefile"]
+geopackage = ["dep:rusqlite"]
+flatgeobuf-format = ["dep:flatgeobuf", "dep:geozero"]
 
 [dependencies]
 clap = { version = "4.0", features = ["derive"] }
@@ -27,3 +33,11 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 quick-xml = "0.37"
 indicatif = "0.17"
+zip = "2.2"
+shapefile = { version = "0.6", optional = true }
+rusqlite = { version = "0.32", features = ["bundled"], optional = true }
+flatgeobuf = { version = "4.3", optional = true }
+geozero = { version = "0.14", optional = true }
+
+[dev-dependencies]
+tempfile = "3"

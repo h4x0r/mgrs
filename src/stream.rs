@@ -1,20 +1,32 @@
-use std::io::{Read, Write, BufReader};
+use std::io::{Cursor, Read, Write, BufReader};
+use std::path::Path;
 use anyhow::{Context, Result};
 use crate::convert;
 use crate::detect;
-use crate::formats::{ConvertedRow, OutputFormat};
+use crate::formats::{ConvertedRow, OutputFormat, InputFormat, PathOutputFormat};
 use crate::formats::csv_format::CsvOutput;
 use crate::formats::geojson::GeoJsonOutput;
 use crate::formats::kml::KmlOutput;
 use crate::formats::gpx::GpxOutput;
+use crate::formats::wkt::WktOutput;
+use crate::formats::topojson::TopoJsonOutput;
+use crate::formats::kmz::KmzOutput;
+#[cfg(feature = "flatgeobuf-format")]
+use crate::formats::flatgeobuf_format::FlatGeobufOutput;
 
-/// Output format selection.
-#[derive(Debug, Clone, Copy)]
+/// Format selection (input and output).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FormatKind {
     Csv,
     GeoJson,
     Kml,
     Gpx,
+    Wkt,
+    TopoJson,
+    Kmz,
+    Shapefile,
+    GeoPackage,
+    FlatGeobuf,
 }
 
 /// How to identify the source column.
@@ -121,7 +133,262 @@ fn create_writer<'a, W: Write + 'a>(
         FormatKind::GeoJson => Box::new(GeoJsonOutput::new(output)),
         FormatKind::Kml => Box::new(KmlOutput::new(output, name_column.clone())),
         FormatKind::Gpx => Box::new(GpxOutput::new(output, name_column.clone())),
+        FormatKind::Wkt => Box::new(WktOutput::new(output)),
+        FormatKind::TopoJson => Box::new(TopoJsonOutput::new(output)),
+        FormatKind::Kmz => Box::new(KmzOutput::new(output, name_column.clone())),
+        #[cfg(feature = "flatgeobuf-format")]
+        FormatKind::FlatGeobuf => Box::new(FlatGeobufOutput::new(output)),
+        #[cfg(not(feature = "flatgeobuf-format"))]
+        FormatKind::FlatGeobuf => anyhow::bail!("FlatGeobuf support not compiled (enable 'flatgeobuf-format' feature)"),
+        FormatKind::Shapefile | FormatKind::GeoPackage => {
+            anyhow::bail!("Format {:?} requires --output flag (path-based format)", format)
+        }
     })
+}
+
+/// Create a reader for the given input format.
+pub fn create_reader(data: Vec<u8>, format: FormatKind) -> Result<Box<dyn InputFormat>> {
+    use crate::formats::csv_input::CsvInput;
+    use crate::formats::geojson_input::GeoJsonInput;
+    use crate::formats::kml_input::KmlInput;
+    use crate::formats::gpx_input::GpxInput;
+    use crate::formats::wkt::WktInput;
+    use crate::formats::topojson::TopoJsonInput;
+    use crate::formats::kmz::KmzInput;
+    #[cfg(feature = "flatgeobuf-format")]
+    use crate::formats::flatgeobuf_format::FlatGeobufInput;
+
+    Ok(match format {
+        FormatKind::Csv => Box::new(CsvInput::new(Cursor::new(data))?),
+        FormatKind::GeoJson => Box::new(GeoJsonInput::new(Cursor::new(data))?),
+        FormatKind::Kml => Box::new(KmlInput::new(Cursor::new(data))?),
+        FormatKind::Gpx => Box::new(GpxInput::new(Cursor::new(data))?),
+        FormatKind::Wkt => Box::new(WktInput::new(Cursor::new(data))?),
+        FormatKind::TopoJson => Box::new(TopoJsonInput::new(Cursor::new(data))?),
+        FormatKind::Kmz => Box::new(KmzInput::new(Cursor::new(data))?),
+        #[cfg(feature = "flatgeobuf-format")]
+        FormatKind::FlatGeobuf => Box::new(FlatGeobufInput::new(Cursor::new(data))?),
+        #[cfg(not(feature = "flatgeobuf-format"))]
+        FormatKind::FlatGeobuf => anyhow::bail!("FlatGeobuf support not compiled (enable 'flatgeobuf-format' feature)"),
+        FormatKind::Shapefile => {
+            anyhow::bail!("Shapefile input requires a file path, use --input-format with a .shp file")
+        }
+        FormatKind::GeoPackage => {
+            anyhow::bail!("GeoPackage input requires a file path, use --input-format with a .gpkg file")
+        }
+    })
+}
+
+/// Create a path-based reader for Shapefile or GeoPackage.
+pub fn create_path_reader(path: &Path, format: FormatKind) -> Result<Box<dyn InputFormat>> {
+    match format {
+        #[cfg(feature = "shapefile-format")]
+        FormatKind::Shapefile => {
+            use crate::formats::shapefile_format::ShapefileInput;
+            Ok(Box::new(ShapefileInput::new(path)?))
+        }
+        #[cfg(not(feature = "shapefile-format"))]
+        FormatKind::Shapefile => anyhow::bail!("Shapefile support not compiled (enable 'shapefile-format' feature)"),
+        #[cfg(feature = "geopackage")]
+        FormatKind::GeoPackage => {
+            use crate::formats::geopackage::GeoPackageInput;
+            Ok(Box::new(GeoPackageInput::new(path)?))
+        }
+        #[cfg(not(feature = "geopackage"))]
+        FormatKind::GeoPackage => anyhow::bail!("GeoPackage support not compiled (enable 'geopackage' feature)"),
+        _ => anyhow::bail!("Format {:?} is not a path-based input format", format),
+    }
+}
+
+/// Create a path-based writer for Shapefile or GeoPackage.
+fn create_path_writer(path: &Path, format: FormatKind, headers: &[String]) -> Result<Box<dyn PathOutputFormat>> {
+    match format {
+        #[cfg(feature = "shapefile-format")]
+        FormatKind::Shapefile => {
+            use crate::formats::shapefile_format::ShapefileOutput;
+            Ok(Box::new(ShapefileOutput::new(path, headers)?))
+        }
+        #[cfg(not(feature = "shapefile-format"))]
+        FormatKind::Shapefile => anyhow::bail!("Shapefile support not compiled (enable 'shapefile-format' feature)"),
+        #[cfg(feature = "geopackage")]
+        FormatKind::GeoPackage => {
+            use crate::formats::geopackage::GeoPackageOutput;
+            Ok(Box::new(GeoPackageOutput::new(path, headers)?))
+        }
+        #[cfg(not(feature = "geopackage"))]
+        FormatKind::GeoPackage => anyhow::bail!("GeoPackage support not compiled (enable 'geopackage' feature)"),
+        _ => anyhow::bail!("Format {:?} is not a path-based output format", format),
+    }
+}
+
+/// Process input from any supported format, converting to any output format.
+/// Used when input is a non-CSV format.
+pub fn process_format_to_format<W: Write>(
+    mut reader: Box<dyn InputFormat>,
+    output: W,
+    out_format: FormatKind,
+    config: &ProcessConfig,
+) -> Result<ProcessStats> {
+    let headers = reader.headers();
+    let mut writer = create_writer(output, out_format, &config.name_column)?;
+    writer.write_header(&headers)?;
+
+    let mut stats = ProcessStats { total_rows: 0, succeeded_rows: 0, failed_rows: 0 };
+
+    while let Some(record) = reader.next_record()? {
+        stats.total_rows += 1;
+        let fields: Vec<String> = headers.iter().map(|h| {
+            record.fields.iter().find(|(k,_)| k == h).map(|(_,v)| v.clone()).unwrap_or_default()
+        }).collect();
+
+        if record.latitude.is_some() && record.longitude.is_some() {
+            stats.succeeded_rows += 1;
+        } else {
+            stats.failed_rows += 1;
+        }
+
+        writer.write_row(&ConvertedRow {
+            fields,
+            headers: headers.clone(),
+            latitude: record.latitude,
+            longitude: record.longitude,
+            mgrs_source: None,
+        })?;
+    }
+
+    writer.finish()?;
+    Ok(stats)
+}
+
+/// Process input from any format to a path-based output (Shapefile, GeoPackage).
+pub fn process_format_to_path(
+    mut reader: Box<dyn InputFormat>,
+    output_path: &Path,
+    out_format: FormatKind,
+) -> Result<ProcessStats> {
+    let headers = reader.headers();
+
+    let mut writer: Box<dyn PathOutputFormat> = create_path_writer(output_path, out_format, &headers)?;
+
+    let mut stats = ProcessStats { total_rows: 0, succeeded_rows: 0, failed_rows: 0 };
+
+    while let Some(record) = reader.next_record()? {
+        stats.total_rows += 1;
+        let fields: Vec<String> = headers.iter().map(|h| {
+            record.fields.iter().find(|(k,_)| k == h).map(|(_,v)| v.clone()).unwrap_or_default()
+        }).collect();
+
+        if record.latitude.is_some() && record.longitude.is_some() {
+            stats.succeeded_rows += 1;
+        } else {
+            stats.failed_rows += 1;
+        }
+
+        writer.write_row(&ConvertedRow {
+            fields,
+            headers: headers.clone(),
+            latitude: record.latitude,
+            longitude: record.longitude,
+            mgrs_source: None,
+        })?;
+    }
+
+    writer.finish()?;
+    Ok(stats)
+}
+
+/// Process CSV to a path-based output format (Shapefile, GeoPackage).
+pub fn process_csv_to_path<R: Read>(
+    input: R,
+    output_path: &Path,
+    out_format: FormatKind,
+    config: &ProcessConfig,
+) -> Result<ProcessStats> {
+    let mut csv_reader = csv::Reader::from_reader(BufReader::new(input));
+    let headers: Vec<String> = csv_reader.headers()?.iter().map(|h| h.to_string()).collect();
+
+    let mgrs_col = match &config.column {
+        Some(ColumnSpec::Name(name)) => {
+            headers.iter().position(|h| h == name)
+                .with_context(|| format!("Column '{}' not found in headers", name))?
+        }
+        Some(ColumnSpec::Index(idx)) => *idx,
+        None => {
+            let mut sample_records = Vec::new();
+            for result in csv_reader.records() {
+                let record = result?;
+                sample_records.push(record);
+                if sample_records.len() >= 100 { break; }
+            }
+            let col = detect::detect_mgrs_column(&sample_records)
+                .with_context(|| "No MGRS-like column detected")?;
+
+            let mut writer = create_path_writer(output_path, out_format, &headers)?;
+
+            let mut stats = ProcessStats { total_rows: 0, succeeded_rows: 0, failed_rows: 0 };
+            for record in &sample_records {
+                process_record_path(record, &headers, col, &mut *writer, &mut stats, config.strict)?;
+            }
+            for result in csv_reader.records() {
+                let record = result?;
+                process_record_path(&record, &headers, col, &mut *writer, &mut stats, config.strict)?;
+            }
+            writer.finish()?;
+            return Ok(stats);
+        }
+    };
+
+    let mut writer = create_path_writer(output_path, out_format, &headers)?;
+
+    let mut stats = ProcessStats { total_rows: 0, succeeded_rows: 0, failed_rows: 0 };
+    for result in csv_reader.records() {
+        let record = result?;
+        process_record_path(&record, &headers, mgrs_col, &mut *writer, &mut stats, config.strict)?;
+    }
+    writer.finish()?;
+    Ok(stats)
+}
+
+fn process_record_path(
+    record: &csv::StringRecord,
+    headers: &[String],
+    mgrs_col: usize,
+    writer: &mut dyn PathOutputFormat,
+    stats: &mut ProcessStats,
+    strict: bool,
+) -> Result<()> {
+    stats.total_rows += 1;
+    let mgrs_value = record.get(mgrs_col).unwrap_or("").trim();
+
+    let (lat, lon, mgrs_src) = if !mgrs_value.is_empty() && detect::is_likely_mgrs(mgrs_value) {
+        match convert::mgrs_to_latlon(mgrs_value) {
+            Ok(coord) => (Some(coord.latitude), Some(coord.longitude), Some(mgrs_value.to_string())),
+            Err(e) => {
+                stats.failed_rows += 1;
+                eprintln!("Warning: row {}: failed to convert '{}': {}", stats.total_rows, mgrs_value, e);
+                if strict {
+                    return Err(e.context(format!("Strict mode: aborting at row {}", stats.total_rows)));
+                }
+                (None, None, Some(mgrs_value.to_string()))
+            }
+        }
+    } else {
+        stats.failed_rows += 1;
+        (None, None, None)
+    };
+
+    if lat.is_some() { stats.succeeded_rows += 1; }
+
+    let fields: Vec<String> = record.iter().map(|f| f.to_string()).collect();
+    writer.write_row(&ConvertedRow {
+        fields,
+        headers: headers.to_vec(),
+        latitude: lat,
+        longitude: lon,
+        mgrs_source: mgrs_src,
+    })?;
+
+    Ok(())
 }
 
 fn process_record(
