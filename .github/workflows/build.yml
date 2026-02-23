@@ -67,15 +67,19 @@ jobs:
     - name: Build Windows binary
       run: cargo build --release --target x86_64-pc-windows-msvc
 
+    - name: Package Windows binary
+      run: Compress-Archive -Path target/x86_64-pc-windows-msvc/release/mgrs.exe -DestinationPath mgrs-x86_64-pc-windows-msvc.zip
+      shell: pwsh
+
     - name: Upload Windows binary
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
       with:
         name: mgrs-windows-x64
-        path: target/x86_64-pc-windows-msvc/release/mgrs.exe
+        path: mgrs-x86_64-pc-windows-msvc.zip
 
     - name: Upload to release
       if: github.event_name == 'release'
       run: |
-        gh release upload ${{ github.event.release.tag_name }} target/x86_64-pc-windows-msvc/release/mgrs.exe --clobber
+        gh release upload ${{ github.event.release.tag_name }} mgrs-x86_64-pc-windows-msvc.zip --clobber
       env:
         GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

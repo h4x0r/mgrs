@@ -25,7 +25,7 @@ cargo install mgrs
 
 ### Windows binary
 
-Download `mgrs.exe` from the [latest release](https://github.com/h4x0r/mgrs/releases/latest).
+Download `mgrs-x86_64-pc-windows-msvc.zip` from the [latest release](https://github.com/h4x0r/mgrs/releases/latest).
 
 ### From source
 
