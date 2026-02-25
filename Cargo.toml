@@ -34,7 +34,7 @@ serde_json = "1.0"
 quick-xml = "0.39"
 indicatif = "0.18"
 zip = "7.2"
-shapefile = { version = "0.6", optional = true }
+shapefile = { version = "0.7", optional = true }
 rusqlite = { version = "0.38", features = ["bundled"], optional = true }
 flatgeobuf = { version = "4.3", optional = true }
 geozero = { version = "0.14", optional = true }
