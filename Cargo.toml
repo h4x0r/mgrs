@@ -37,7 +37,7 @@ zip = "8.0"
 shapefile = { version = "0.7", optional = true }
 rusqlite = { version = "0.39", features = ["bundled"], optional = true }
 flatgeobuf = { version = "4.3", optional = true }
-geozero = { version = "0.14", optional = true }
+geozero = { version = "0.15", optional = true }
 
 [dev-dependencies]
 tempfile = "3"
