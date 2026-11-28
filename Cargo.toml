@@ -33,7 +33,7 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 quick-xml = "0.42"
 indicatif = "0.18"
-zip = "8.0"
+zip = "9.0"
 shapefile = { version = "0.9", optional = true }
 rusqlite = { version = "0.40", features = ["bundled"], optional = true }
 flatgeobuf = { version = "6.0", optional = true }
